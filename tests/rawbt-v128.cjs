@@ -1,0 +1,32 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+const source=fs.readFileSync('js/printer.js','utf8');
+function setup(android=true){const dom=new JSDOM('<body><main id="app"></main></body>',{url:'https://example.test/personal',runScripts:'outside-only'});const w=dom.window;w.TextEncoder=TextEncoder;w.confirm=()=>true;Object.defineProperty(w.navigator,'userAgent',{value:android?'Mozilla Android 6.0 Firefox':'Desktop'});w.eval(source);return w;}
+(async()=>{
+ const w=setup(),p=w.ChingadazoPrinter;
+ assert.equal((await p.status()).connected,false);
+ p.setTransport('rawbt');assert.equal((await p.status()).transport,'rawbt');assert.equal((await p.status()).connected,false);assert.equal((await p.status()).configured,true);
+ const sale={code:'TEST',items:[{name:'Taco\x1bp<img>',qty:1,unit:10}],total:10};
+ assert.equal((await p.print(sale,'client',{})).queued,true);
+ await p.print(sale,'kitchen',{});await p.drawer();
+ let links=[...w.document.querySelectorAll('#rawbt-jobs a')];assert.equal(links.length,3);
+ const decode=a=>Buffer.from(a.getAttribute('href').split(',')[1],'base64');
+ assert.equal(decode(links[0]).subarray(-3).toString('hex'),'1d5600');
+ assert(decode(links[0]).toString().includes('TOTAL'));assert(!decode(links[1]).toString().includes('TOTAL'));
+ assert.equal(decode(links[2]).toString('hex'),'1b401b700019fa');
+ assert.equal(w.document.querySelectorAll('#rawbt-jobs img').length,0);
+ assert(!decode(links[0]).includes(Buffer.from([0x1b,0x70])));
+ links[0].dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true}));
+ assert.equal(links[0].hasAttribute('href'),false);assert.match(links[0].textContent,/solicitado/);
+ assert.equal(w.document.querySelectorAll('#rawbt-jobs a[href]').length,2);
+ assert.throws(()=>p.setTransport('arbitrary'));assert.throws(()=>setup(false).ChingadazoPrinter.setTransport('rawbt'),/Android/);
+ p.setTransport('usb');assert.equal((await p.status()).configured,false);
+ const writes=[];let released=0,closed=0;
+ const device={opened:false,vendorId:8137,productId:8214,productName:'USB Printer P',configuration:{interfaces:[{interfaceNumber:0,alternates:[{alternateSetting:0,endpoints:[{direction:'out',type:'bulk',endpointNumber:1}]}]}]},async open(){this.opened=true;},async claimInterface(){},async releaseInterface(){released++;},async close(){this.opened=false;closed++;},async transferOut(ep,data){assert.equal(ep,1);writes.push(Buffer.from(data));return {status:'ok'};}};
+ w.navigator.usb={getDevices:async()=>[device],requestDevice:async()=>device};
+ await p.connect();await p.print(sale,'client',{});await p.drawer();assert.equal(released,3);assert.equal(closed,3);assert.equal(writes.at(-1).toString('hex'),'1b401b700019fa');assert.equal((await p.status()).connected,true);
+ p.setTransport('rawbt');const pending=w.document.querySelectorAll('#rawbt-jobs a')[1].parentNode;w.confirm=()=>false;pending.querySelectorAll('button')[1].click();assert(pending.isConnected);w.confirm=()=>true;pending.querySelectorAll('button')[1].click();assert(!pending.isConnected);
+ const sent=w.document.querySelector('#rawbt-jobs a').parentNode;sent.querySelector('button').click();assert(sent.querySelector('a').hasAttribute('href'));
+ await assert.rejects(()=>p.print({...sale,notes:'x'.repeat(80),items:Array.from({length:2000},()=>sale.items[0])},'client',{}),/demasiado grande/);
+ assert.match(fs.readFileSync('js/app.js','utf8'),/status\?\.configured/);
+ w.close();console.log('PASS RawBT: explicit transport, queued gestures, binary drawer/cut, sanitized receipt, no false hardware confirmation.');
+})().catch(e=>{console.error(e);process.exit(1);});

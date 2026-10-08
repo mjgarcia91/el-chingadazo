@@ -1,0 +1,19 @@
+{
+  "name": "Chingadazo Delivery",
+  "short_name": "Delivery",
+  "description": "Portal privado para repartidores de El Chingadazo",
+  "id": "/delivery/",
+  "start_url": "/delivery/",
+  "scope": "/delivery/",
+  "display": "standalone",
+  "background_color": "#101010",
+  "theme_color": "#f6b800",
+  "icons": [
+    {
+      "src": "../assets/logo.jpg",
+      "sizes": "960x960",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

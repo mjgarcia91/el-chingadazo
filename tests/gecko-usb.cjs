@@ -1,0 +1,26 @@
+// Static safety guards; these do not substitute Android permission/device tests.
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const read=name=>fs.readFileSync('android/gecko/src/hn/chingadazo/pos/'+name+'.java','utf8');
+const delegate=read('GeckoUsbDelegate'),transport=read('GeckoUsbTransport'),commands=read('GeckoUsbCommands');
+assert.match(delegate,/sender\.webExtension==expected/);
+assert.match(delegate,/sender\.session==null/);
+assert.match(delegate,/ENV_TYPE_EXTENSION/);
+assert.match(delegate,/GeckoPolicy\.validate\(fields\)/);
+assert.match(delegate,/port\.postMessage\(response\)/);
+assert.doesNotMatch(delegate,/sendNativeMessage/);
+assert.match(delegate,/case "print":result=usb.send\(GeckoUsbCommands.ticket\(c.text\)\);break;/,'validated real tickets use the same isolated printer command');
+assert.match(delegate,/busy\.compareAndSet\(false,true\)/);
+assert.match(delegate,/seen.contains\(c.id\)/);
+assert.match(transport,/manager.getDeviceList\(\)/);
+assert.match(transport,/GeckoUsbClaim.claim\(c.iface.getInterfaceClass\(\),c.kernelDetachApproved,force->next.claimInterface\(c.iface,force\)\)/);
+assert.match(transport,/candidate.kernelDetachApproved=candidate.iface.getInterfaceClass\(\)==7/);
+assert.doesNotMatch(transport,/Interfaz USB ocupada/);
+assert.match(transport,/requestPermission/);
+assert.match(transport,/connected",connection!=null&&opened==c/);
+assert.match(transport,/physicalConfirmed",false/);
+assert.match(transport,/bulkTransfer\(opened.endpoint,data,offset,count,500\)/);
+assert.doesNotMatch(transport,/8137|8214|PrinterCore.printer/);
+assert.match(commands,/PrinterCore.ticket\(text\)/);
+assert.match(commands,/StandardCharsets.ISO_8859_1/);
+assert.doesNotMatch(commands.slice(commands.indexOf('public static byte[] ticket'),commands.indexOf('public static byte[] cut')),/drawer\(/);
+console.log('Gecko USB static guards: trusted port, selection, actual status, bounded I/O, separate actions');

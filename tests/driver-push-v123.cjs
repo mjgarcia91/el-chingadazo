@@ -1,0 +1,26 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto').webcrypto,vm=require('node:vm');
+(async()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../server/push.js'),'utf8');
+ await require('./fixtures/configure-instance.cjs')('test');
+ const {createPush}=await import('../server/push.js');
+ const keys=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:1024,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
+ const pem=Buffer.from(await crypto.subtle.exportKey('pkcs8',keys.privateKey)).toString('base64');
+ const env={FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:'test',client_email:'test@example.test',private_key:`-----BEGIN PRIVATE KEY-----\n${pem}\n-----END PRIVATE KEY-----`})};
+ const state={roles:{one:'driver_pending',two:'driver'},drivers:{'auth-one':{authUid:'one',status:'pending',emailVerified:true,applicationVersion:123},'auth-two':{authUid:'two',status:'approved'}},pushTokens:{drivers:{'auth-two':{key:{token:'other-device'.repeat(8)}}}}};
+ const db=async(e,p,i)=>{const parts=p.split('/').filter(Boolean);let obj=state;for(const k of parts.slice(0,-1))obj=obj[k]||={};if(i)obj[parts.at(-1)]=JSON.parse(i.body);return obj[parts.at(-1)]||null;};
+ const push=createPush({db,verifyFirebaseUser:async()=>({localId:'one'}),json:x=>Response.json(x)});
+ const req=()=>new Request('https://test/api/delivery/push-subscribe',{method:'POST',headers:{Authorization:'Bearer valid'},body:JSON.stringify({token:'my-device'.repeat(10)})});
+ const result=await (await push.subscribe(req(),env)).json();assert.equal(result.audience,'drivers');assert.equal(state.pushTokens.customers,undefined);
+ const deliveries=[];global.fetch=async(url,options)=>{if(String(url).includes('oauth2.googleapis.com'))return Response.json({access_token:'mock'});deliveries.push(JSON.parse(options.body).message);return Response.json({name:'accepted'});};
+ await push.notifyDrivers(env,{type:'delivery',id:'order'});assert.equal(deliveries.length,1);assert.equal(deliveries[0].token,'other-device'.repeat(8));deliveries.length=0;
+ await push.notifyDriverApproved(env,'auth-one');assert.equal(deliveries.length,0);
+ state.roles.one='driver';Object.assign(state.drivers['auth-one'],{status:'approved',approvalNotice:{id:'approval-123',title:'Solicitud aprobada',body:'Revisa tu portal'}});
+ await push.notifyDriverApproved(env,'auth-one');assert.equal(deliveries.length,1);assert.equal(deliveries[0].token,'my-device'.repeat(10));assert.equal(deliveries[0].data.url,'/delivery/');assert.equal(deliveries[0].webpush.notification.tag,'approval-123');
+ state.drivers['auth-one'].status='suspended';state.roles.one='driver_suspended';await assert.rejects(push.subscribe(req(),env),e=>e.status===403);await push.notifyDriverApproved(env,'auth-one');assert.equal(deliveries.length,1);
+ const listeners={},shown=[];let waited;
+ const context=vm.createContext({URL,Response,self:{location:{origin:'https://test'},addEventListener:(k,f)=>listeners[k]=f,registration:{showNotification:async(t,n)=>shown.push({t,n})}},fetch:()=>{throw Error('external resource intercepted')}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../delivery/sw.js'),'utf8'),context);
+ listeners.fetch({request:new Request('https://www.gstatic.com/firebasejs/sdk.js'),respondWith:()=>assert.fail('Must not intercept external SDK')});
+ listeners.push({data:{json:()=>({notification:{title:'Solicitud aprobada',body:'Lista'},data:{url:'/delivery/',tag:'approval-123'}})},waitUntil:p=>waited=p});await waited;assert.equal(shown[0].t,'Solicitud aprobada');assert.equal(shown[0].n.tag,'approval-123');
+ console.log('PASS V123 push: pending opt-in, no pending order alerts, only approved recipient, suspension and service-worker notification');
+})().catch(e=>{console.error(e);process.exitCode=1});

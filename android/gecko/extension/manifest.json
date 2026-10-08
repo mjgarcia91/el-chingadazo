@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "name": "Chingadazo USB",
+  "version": "1.0.0",
+  "browser_specific_settings": {"gecko": {"id": "pos.print@coresystem"}},
+  "permissions": ["nativeMessaging", "geckoViewAddons"],
+  "background": {"scripts": ["native-port.js", "background.js"]},
+  "content_scripts": [{
+    "matches": ["https://el-chingadazo.magaa1825.workers.dev/personal*"],
+    "js": ["content.js"],
+    "run_at": "document_start",
+    "all_frames": false
+  }]
+}

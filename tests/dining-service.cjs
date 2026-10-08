@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {createDining}=await import('../server/dining.js');
+ let state=null, actor={id:'admin-one',role:'admin'}, seq=0;
+ const service=createDining({db:async()=>structuredClone(state),mutateDb:async(_,path,fn)=>{assert.equal(path,'/dining');state=fn(structuredClone(state));return structuredClone(state)},identity:async()=>actor,json:(body,status=200)=>new Response(JSON.stringify(body),{status})});
+ const call=async(input)=>service.handle(new Request('https://test.local/api/dining',{method:input?'POST':'GET',...(input?{body:JSON.stringify(input)}:{})}),{});
+ const run=async(action,fields={})=>{const response=await call({action,operationId:'op-'+(++seq),expectedRevision:state?.revision||0,...fields});return response.json()};
+ actor=null;await assert.rejects(call(),e=>e.status===401);
+ actor={id:'customer',role:'customer'};await assert.rejects(call(),e=>e.status===403);
+ actor={id:'admin-one',role:'admin'};await run('initialize');assert.equal(Object.keys(state.tables).length,30);assert.equal(state.tables['table-2'].zoneId,'salon');assert.equal(state.tables['table-30'].zoneId,'salon');
+ await run('initialize');assert.equal(Object.keys(state.tables).length,30);
+ const open={action:'open',tableId:'table-1',operationId:'open-one',expectedRevision:state.revision};await call(open);const id=state.tables['table-1'].accountId;assert(id);const revision=state.revision;
+ await call(open);assert.equal(state.revision,revision);assert.equal(Object.keys(state.accounts).length,1);
+ await assert.rejects(call({...open,tableId:'table-2'}),e=>e.status===409);
+ await assert.rejects(run('open',{tableId:'table-1'}),e=>e.status===409);
+ await assert.rejects(run('saveTable',{tableId:'table-1',table:{...state.tables['table-1'],active:false}}),e=>e.status===409);
+ await run('transfer',{accountId:id,destinationTableId:'table-2'});assert.equal(state.tables['table-1'].accountId,'');assert.equal(state.tables['table-2'].accountId,id);assert.equal(state.accounts[id].tableId,'table-2');
+ await assert.rejects(call({action:'open',tableId:'table-3',operationId:'stale',expectedRevision:0}),e=>e.status===409);
+ await assert.rejects(run('saveTable',{tableId:'new-table',table:{number:2,zoneId:'salon',kind:'table',active:true,row:1,column:1}}),e=>e.status===409);
+ actor={id:'cash',role:'cashier'};await assert.rejects(run('saveZone',{zoneId:'plaza',name:'Otra'}),e=>e.status===403);
+ await run('open',{tableId:'table-3'});await assert.rejects(run('transfer',{accountId:id,destinationTableId:'table-3'}),e=>e.status===409);
+ actor={id:'admin-one',role:'admin'};await run('cancelEmpty',{accountId:id});assert.equal(state.tables['table-2'].accountId,'');assert.equal(state.accounts[id].status,'cancelled');
+ const result=await (await call()).json();assert(!result.operations);assert(!result.accounts[id]);
+ console.log('PASS dining: private initialization, 30 positions, immutable retry, stale revisions, occupied destination, permissions and empty-account history.');
+})().catch(e=>{console.error(e);process.exitCode=1});

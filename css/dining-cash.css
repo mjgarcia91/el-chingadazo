@@ -1,0 +1,117 @@
+.dining-cash{margin:0;padding:0;border:1px solid #665b24;background:#181818;border-radius:12px}
+.dining-cash>summary{cursor:pointer;padding:12px;min-height:48px;box-sizing:border-box;font-weight:700;color:#fff8e7}
+.dining-cash>summary span{font-size:12px;margin-left:8px;color:#ddd}
+.dining-cash-body{padding:12px;border-top:1px solid #665b24}
+.dining-cash-body>p,.dining-cash-body>h3{margin:8px 0}
+.dining-cash-body>ul{padding-left:20px;max-height:160px;overflow:auto}
+.dining-cash .section-h{gap:.75rem;flex-wrap:wrap}.dining-cash-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem}
+.dining-cash .queue-actions{display:flex;flex-wrap:wrap;gap:.75rem}.dining-cash button{min-height:44px;white-space:normal}
+.dining-cash label{display:block;margin-top:.75rem}.dining-cash select,.dining-cash input{width:100%;min-height:44px;max-width:28rem;box-sizing:border-box}
+.dining-cash .okbox{margin:1rem 0;padding:1rem}.dining-cash small{display:block}.dining-cash button:focus-visible{outline:3px solid #45c6ef;outline-offset:2px}
+@media(max-width:420px){.dining-cash .queue-actions button{width:100%}.dining-cash-list{grid-template-columns:1fr}}
+
+/* Cash workspace: category rail / products / account. No payment logic changes. */
+.cash-workspace [hidden]{display:none!important}
+.cash-subscreen .page{overflow-y:auto!important;display:block!important}
+.cash-subscreen .cash-toolbar,.cash-subscreen .cash-save-status{display:none}
+.cash-fullscreen{padding:12px 0}
+.cash-screen-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.cash-screen-heading h2{margin:0;font-size:28px}
+.cash-checkout-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,42%);gap:24px}
+.cash-amount{font-size:36px;font-weight:700;color:#ffdf38;margin:8px 0 16px}
+.cash-payment-controls{padding:16px;border:1px solid #555;border-radius:12px;background:#181818}
+.cash-workspace .cash-payment-controls .pos-payment{display:block;border:0}
+.cash-workspace .cash-payment-controls .pos-payment>summary{display:none}
+.cash-workspace .cash-payment-controls .pos-payment-fields{position:static!important;max-height:none!important;border:0;padding:0}
+.cash-payment-controls .pos-channels,.cash-payment-controls .pos-sale-buttons{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.cash-payment-controls button,.cash-payment-controls input,.cash-payment-controls select{min-height:48px;font-size:18px}
+.cash-payment-controls input,.cash-payment-controls select{width:100%;box-sizing:border-box;margin:8px 0}
+.cash-payment-controls label{display:block}
+.cash-receipt{background:#f8f5e8;color:#151515;padding:24px;border-radius:8px;align-self:start}
+.cash-receipt .hint{color:#555}
+.cash-receipt ul{list-style:none;padding:0;border-top:1px dashed #777;border-bottom:1px dashed #777}
+.cash-receipt li{display:flex;justify-content:space-between;gap:12px;padding:12px 0;overflow-wrap:anywhere}
+.cash-fullscreen .dining-cash>summary{display:none}
+.cash-fullscreen .dining-cash-body{border:0}
+.cash-fullscreen .dining-cash-list{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.cash-fullscreen .dining-cash-list .order{margin:0;padding:16px}
+.cash-fullscreen .dining-cash-body>ul{max-height:none}
+[data-cash-pane="table-payment"] .dining-cash-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,42%);gap:12px 24px}
+[data-cash-pane="table-payment"] .dining-cash-body>.cash-payment-controls{grid-column:1;grid-row:1}
+[data-cash-pane="table-payment"] .dining-cash-body>.cash-receipt{grid-column:2;grid-row:1}
+[data-cash-pane="table-payment"] .dining-cash-body>[data-cash-refresh],[data-cash-pane="table-payment"] .dining-cash-body>p[role="status"]{display:none}
+[data-cash-pane="table-payment"] .dining-cash-body>h3,[data-cash-pane="table-payment"] .dining-cash-body>ul,[data-cash-pane="table-payment"] .dining-cash-body>p:not([role]){grid-column:2}
+[data-cash-pane="table-payment"] .dining-cash-body>.queue-actions{display:none}
+[data-cash-pane="table-payment"] .dining-cash-body>button,[data-cash-pane="table-payment"] .dining-cash-body>p[role]{grid-column:1/-1}
+@media(max-width:699px){.cash-checkout-layout,[data-cash-pane="table-payment"] .dining-cash-body{display:block}.cash-receipt{margin-top:16px}.cash-payment-controls{padding:12px}.cash-screen-heading{flex-wrap:wrap}}
+.cash-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;position:relative;z-index:8}
+.cash-toolbar .pos-heading{flex:1;margin:0;min-width:0}
+.cash-toolbar .pos-heading h2{margin:0;font-size:22px}
+.cash-toolbar .pos-heading span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}
+.cash-workspace .cash-toolbar .pos-config{position:static;margin:0;padding:0;flex:none}
+.cash-workspace .cash-toolbar .pos-config>summary{min-height:44px;padding:10px 12px;font-size:14px;box-sizing:border-box}
+.cash-workspace .cash-toolbar .pos-config[open] .pos-operations{position:absolute;top:100%;left:0;right:0;background:#18181b;border:1px solid #555;padding:12px;max-height:65vh;overflow:auto}
+.cash-toolbar .cash-shift{min-height:44px;padding:8px 12px;font-size:14px}
+.cash-save-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0}
+.cash-offline-help{font-size:12px;position:relative}
+.cash-offline-help summary{cursor:pointer;padding:8px;min-height:32px;box-sizing:border-box}
+.cash-offline-help[open] p{position:absolute;top:100%;right:0;width:260px;max-width:80vw;background:#202020;border:1px solid #777;padding:12px;z-index:9;margin:0}
+.cash-workspace .pos-customer{border:1px solid #444;border-radius:8px}
+.cash-workspace .pos-customer>summary{padding:10px;min-height:44px;box-sizing:border-box;cursor:pointer;font-size:14px}
+.cash-workspace .pos-customer .pos-channels{padding:8px}
+.cash-workspace .pos-ticket .pos-customer .pos-name{margin:0;min-height:44px}
+.cash-workspace #localAccountStatus{margin:0;font-size:13px;line-height:1.35}
+.cash-workspace .pos-wrap{grid-template-columns:minmax(0,1fr) minmax(300px,32%);gap:12px;min-width:0}
+.cash-workspace .pos-menu{display:grid;grid-template-columns:156px minmax(0,1fr);gap:12px;min-width:0;min-height:0}
+.cash-workspace .pos-fams{display:flex;flex-direction:column;flex-wrap:nowrap;gap:8px;margin:0;max-height:none;overflow-y:auto;min-height:0;align-items:stretch}
+.cash-workspace .pos-fam{flex-shrink:0;min-height:48px;text-align:left;font-size:15px;font-weight:650;white-space:normal;overflow-wrap:anywhere;padding:10px}
+.cash-workspace .pos-grid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));align-content:start;overflow-y:auto;min-height:0}
+.cash-workspace .pos-item{min-height:100px;box-shadow:none;font-size:15px}
+.cash-workspace .pos-item .pos-pic:empty{display:none}
+.cash-workspace .pos-ticket{min-width:0;gap:8px}
+.cash-workspace .pos-ticket .btn,.cash-workspace .pos-ticket input{min-height:44px;height:auto;font-size:14px}
+.cash-workspace .pos-ticket .pos-channels{display:flex;gap:4px;flex-wrap:wrap;margin:0}
+.cash-workspace .pos-ticket .pos-channels>.btn{flex:1;padding:8px 4px}
+.cash-workspace .pos-ticket .pos-lines{flex:1 0 80px;overflow:visible}
+.cash-workspace .pos-ticket .pos-total{font-size:24px}
+.cash-workspace .pos-ticket-body{min-height:0;overflow:auto;flex:1 1 auto;display:flex;flex-direction:column;gap:8px}
+.cash-workspace .pos-ticket-actions{flex:none;display:flex;flex-direction:column;gap:8px;background:#141414;border-top:1px solid #444;padding-top:8px}
+.cash-workspace .pos-ticket-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cash-workspace .pos-ticket-heading .btn{font-size:12px;padding:6px 8px}
+.cash-workspace .pos-sale-buttons:not([hidden]){display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cash-workspace .pos-sale-buttons .btn{white-space:normal;padding:8px 4px}
+.cash-workspace .pos-payment{position:relative;border:1px solid #555;border-radius:8px}
+.cash-workspace .pos-payment>summary{min-height:44px;padding:10px;box-sizing:border-box;cursor:pointer;font-weight:650}
+.cash-workspace .pos-payment-fields{padding:12px;background:#202020;border:1px solid #777;border-radius:8px}
+.cash-workspace .pos-payment-fields input{width:100%;box-sizing:border-box}
+.cash-workspace .pos-ticket label{display:block;font-size:14px;margin:4px 0}
+.cash-workspace .pos-ticket .dining-cash-list{grid-template-columns:1fr}
+.cash-workspace .pos-ticket .dining-cash-list .order{margin:0;padding:8px}
+.cash-workspace .pos-ticket .dining-cash-list p{margin:4px 0}
+.cash-workspace .pos-ticket button,.cash-workspace .pos-fam{box-shadow:none}
+.cash-workspace button:focus-visible,.cash-workspace summary:focus-visible{outline:3px solid #45c6ef;outline-offset:2px}
+@media(min-width:1000px) and (min-height:650px){
+ .cash-workspace .pos-menu{display:grid}
+ .cash-workspace .pos-wrap{flex:1;min-height:0}
+ .cash-workspace .pos-ticket{overflow:visible;position:relative}
+ .cash-workspace .pos-ticket .pos-ticket-body{flex:1 1 0;overflow:auto}
+ .cash-workspace .pos-payment[open] .pos-payment-fields{position:absolute;bottom:100%;left:0;right:0;z-index:7;max-height:45vh;overflow:auto}
+ .cash-workspace .pos-config{padding:0}
+ .cash-workspace .pos-heading>span{font-size:13px}
+ .cash-workspace .page>.hint{line-height:1.3}
+ .cash-workspace .pos-config>summary{min-height:44px;font-size:14px}
+}
+@media(min-width:700px) and (max-width:999px){
+ .cash-workspace .pos-menu{grid-template-columns:120px minmax(0,1fr)}
+ .cash-workspace .pos-fams,.cash-workspace .pos-grid{max-height:70vh}
+ .cash-workspace .pos-ticket{position:static}
+}
+@media(max-width:699px){
+ .cash-toolbar .pos-heading span{display:none}
+ .cash-workspace .pos-wrap{grid-template-columns:minmax(0,1fr)}
+ .cash-workspace .pos-menu{grid-template-columns:100px minmax(0,1fr);gap:8px}
+ .cash-workspace .pos-fams,.cash-workspace .pos-grid{max-height:50vh}
+ .cash-workspace .pos-fam{font-size:13px;padding:8px}
+ .cash-workspace .pos-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+ .cash-workspace .pos-ticket{position:static}
+}

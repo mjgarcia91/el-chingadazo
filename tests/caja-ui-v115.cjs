@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
+const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8'),app=read('js/app.js'),css=read('css/styles.css');
+const dom=new JSDOM('<main></main>',{runScripts:'outside-only'}),w=dom.window;
+const unsafe='\"><img src=x onerror=alert(1)>';
+Object.assign(w,{STATE:{posCat:'c',posName:unsafe,posChannel:'mostrador',posPay:'Efectivo',posPayWith:100,posTicket:[{key:'k',name:unsafe,modsText:unsafe,note:unsafe,qty:1,unit:100}]},Store:{get:()=>({settings:{},categories:[{id:'c',name:'Comida'}],products:[{id:'p',category:'c',available:true,name:unsafe,price:100}],orders:[]})},canCash:()=>true,canAdmin:()=>true,currentUser:()=>({name:'Caja'}),myOpenShift:()=>({id:'s',fondo:100}),myDeskOrders:()=>[],needsCashier:()=>false,isDeliveredWithoutInvoice:()=>false,loadHolds:()=>[],posSubtotal:()=>100,paymentMoney:n=>'L. '+n,autoPrintEnabled:()=>true,productImageUrl:()=>'',escapeHtml:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;')});
+w.eval(app.slice(app.indexOf('function viewCaja()'),app.indexOf('function viewTurno()')));
+w.document.querySelector('main').innerHTML=w.viewCaja();
+assert.equal(w.document.querySelectorAll('img[onerror]').length,0);assert.equal(w.document.querySelector('#posName').value,unsafe);
+assert(w.document.querySelector('#posExact'));assert(w.document.querySelector('#posSell').classList.contains('green'));
+assert.equal(w.document.querySelector('.pos-line .order-note').textContent,unsafe);
+assert.equal(w.document.querySelectorAll('[data-pos-pay]').length,3);
+assert(w.document.querySelector('#testDrawer'));
+w.canAdmin=()=>false;w.document.querySelector('main').innerHTML=w.viewCaja();assert(!w.document.querySelector('#testDrawer'));assert(w.document.querySelector('#setPreparationTime'));
+w.STATE.posSending=true;w.document.querySelector('main').innerHTML=w.viewCaja();assert(w.document.querySelector('#posSell').disabled);assert(w.document.querySelector('#posName').disabled);assert(w.document.querySelector('[role=status]'));
+assert.match(css,/\.cash-screen \.page>\.pos-channels\{[^}]*position:static/);
+assert.doesNotMatch(css,/\.cash-screen \.page>\.pos-channels\{[^}]*position:absolute/);
+assert.match(css,/\.pos-item>b,\.pos-item>\.pos-price\{display:block/);
+console.log('PASS caja DOM: escaped names/notes, tender methods, exact cash, busy controls and normal-flow CSS. No real-browser geometry assertions.');dom.window.close();

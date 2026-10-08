@@ -1,0 +1,36 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const read=p=>fs.readFileSync(p,'utf8');
+const config={};vm.runInNewContext(read('js/instance-config.js'),config);
+const http=read('android/src/hn/chingadazo/pos/NativeHttp.java');
+const routes=read('android/src/hn/chingadazo/pos/NativeRoutes.java');
+assert.equal(http.match(/API_KEY="([^"]+)"/)[1],config.CHINGADAZO_CONFIG.firebase.apiKey,'same public Firebase project');
+assert.equal(routes.match(/ORIGIN="([^"]+)"/)[1],config.CHINGADAZO_CONFIG.publicOrigin,'same restaurant origin');
+const manifest=read('android/AndroidManifest-native-access.xml');
+assert.match(manifest,/package="hn\.chingadazo\.nativepilot"/);
+assert.match(manifest,/android:minSdkVersion="23"/);
+assert.match(manifest,/android:allowBackup="false"/);
+assert.match(manifest,/android:usesCleartextTraffic="false"/);
+assert.deepEqual([...manifest.matchAll(/uses-permission android:name="([^"]+)"/g)].map(m=>m[1]),['android.permission.INTERNET']);
+assert.doesNotMatch(manifest,/sharedUserId|debuggable="true"/);
+const build=read('android/build.ps1');
+assert.match(build,/-and \$NativeAccess/,'mutually exclusive variants');
+const sourceList=build.match(/\$sourceNames=if\(\$NativeAccess\)\{@\(([^)]+)\)/)[1];
+assert.doesNotMatch(sourceList,/'MainActivity\.java'|'UsbPrinter\.java'/,'pilot cannot print or load WebView');
+for(const name of [...sourceList.matchAll(/'([^']+)'/g)].map(m=>m[1])) {
+  const source=read('android/src/hn/chingadazo/pos/'+name);
+  assert.doesNotMatch(source,/import android\.webkit\.|\/api\/invoice/,'no invoice route or WebView');
+  if(name!=='NativeRoutes.java')assert.doesNotMatch(source,/\/api\/close-shift/,'shift route stays in fixed router');
+  if(name!=='NativeRoutes.java')assert.doesNotMatch(source,/\/api\/dining/,'dining endpoint stays in fixed router');
+  if(name!=='NativeRoutes.java')assert.doesNotMatch(source,/\/api\/data/,'catalog endpoints restricted to router');
+}
+assert.deepEqual([...routes.matchAll(/\/api\/data\/([a-z]+)/g)].map(m=>m[1]).sort(),['categories','orders','products','shifts','shifts'],'allowlisted catalog, authenticated shifts and exact order');
+const pilot=read('android/src/hn/chingadazo/pos/NativeAccessActivity.java');
+assert.doesNotMatch(pilot,/new NativeSales|Endpoint\.(PRODUCTS|CATEGORIES)/,'access pilot does not launch catalog');
+assert.doesNotMatch(pilot,/\.dining\(|\.release\(|new NativeTablesView/,'pilot has no table controls');
+assert.doesNotMatch(pilot,/\.shifts\(|\.shift\(|\.changeShift\(|new NativeShiftsView/,'access pilot has no shift controls');
+assert.doesNotMatch(pilot,/\.checkout\(|\.order\(/,'access pilot cannot start a payment');
+assert.match(routes,/case DINING: return ORIGIN\+"\/api\/dining"/);
+assert.match(routes,/case RELEASE: return ORIGIN\+"\/api\/dining"/);
+console.log('Native access packaging and project configuration PASS');

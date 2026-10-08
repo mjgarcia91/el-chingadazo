@@ -1,0 +1,28 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {createStoryProof,cleanupStoryProofs}=await import('../server/story-proof.js');
+ const objects=new Map(),deleted=[];let quota;
+ const bucket={put:async(key,bytes,options)=>objects.set(key,{key,bytes,uploaded:new Date(),...options}),head:async key=>objects.get(key)||null,get:async key=>{const o=objects.get(key);return o?{...o,body:o.bytes}:null;},list:async opts=>{assert.equal(opts.prefix,'instagram-proofs/');return {objects:[...objects.values()],truncated:false}},delete:async keys=>{for(const k of keys){deleted.push(k);objects.delete(k)}}};
+ const api=createStoryProof({identity:async r=>{const role=r.headers.get('role')||'customer';return {id:r.headers.get('owner')||'auth-me',role,user:{emailVerified:true}};},db:async()=>({id:'o',userId:'auth-me',status:'entregado',paidAt:'now',invoiced:true,total:100}),mutateDb:async(e,p,fn)=>{quota=fn(quota);return quota}});
+ const env={DRIVER_DOCS:bucket};
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBeEAAAAASUVORK5CYII=','base64');
+ const upload=(type='image/png',data=png,role='customer')=>api.handle(new Request('https://test/api/instagram-proof?orderId=o',{method:'POST',headers:{'Content-Type':type,role},body:data}),env);
+ await assert.rejects(()=>upload('image/svg+xml','<svg/>'),e=>e.status===415);
+ await assert.rejects(()=>upload('image/png','not an image'),e=>e.status===415);
+ await assert.rejects(()=>upload('video/mp4',png),e=>e.status===415);
+ await assert.rejects(()=>upload('image/png',png,'cashier'),e=>e.status===403);
+ await assert.rejects(()=>upload('image/png',new Uint8Array(4*1024*1024+1)),e=>e.status===413);
+ const {proof}=await(await upload()).json();assert(proof.key.startsWith('instagram-proofs/auth-me/o/'));
+ const info=await api.info(env,proof.key,'auth-me','o');assert(Date.parse(info.expiresAt)>Date.now()+6.9*86400000);
+ await assert.rejects(()=>api.info(env,proof.key,'auth-other','o'),e=>e.status===403);
+ const view=(owner,role='customer')=>api.handle(new Request('https://test/api/instagram-proof?key='+encodeURIComponent(proof.key),{headers:{owner,role}}),env);
+ await assert.rejects(()=>view('auth-other'),e=>e.status===403);assert.equal((await view('auth-admin','admin')).headers.get('Cache-Control'),'private, no-store');
+ const record=objects.get(proof.key);record.customMetadata.expiresAt=String(Date.now()-1);await assert.rejects(()=>view('auth-me'),e=>e.status===410);
+ record.uploaded=new Date(Date.now()-7*86400000-1);
+ for(const key of ['drivers/auth-me/selfie.jpg','menu/torta.jpg','deliveries/o/proof.jpg'])objects.set(key,{key,uploaded:record.uploaded,customMetadata:{kind:'instagram-promotion-proof'}});
+ const recent=(await(await upload()).json()).proof.key;
+ const result=await cleanupStoryProofs(env);assert.equal(result.deleted,1);assert.deepEqual(deleted,[proof.key]);assert(objects.has(recent));assert(objects.has('drivers/auth-me/selfie.jpg'));assert(objects.has('menu/torta.jpg'));assert(objects.has('deliveries/o/proof.jpg'));
+ await upload();await upload();await upload();await assert.rejects(()=>upload(),e=>e.status===429);
+ assert.equal((await cleanupStoryProofs(env)).deleted,0);
+ console.log('PASS proof: image validation, size/quota limits, owner/admin access, expiry, 7-day cleanup confined to Instagram prefix, driver/menu/delivery images preserved, repeat cleanup safe. R2 mocked.');
+})().catch(e=>{console.error(e);process.exitCode=1});

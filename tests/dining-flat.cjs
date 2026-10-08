@@ -1,0 +1,35 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {createDining}=await import('../server/dining.js');
+ let state={schemaVersion:1,revision:7,zones:{first:{id:'first',name:'Primer nivel'},bar:{id:'bar',name:'Barra'}},tables:{},accounts:{a:{id:'a',tableId:'bar-1',status:'open',total:55,items:[{name:'Plato',qty:1,unit:55}],history:[{action:'open',kind:'bar',number:1}]}},operations:{old:{fingerprint:'keep'}}};
+ for(let n=1;n<=20;n++)state.tables['table-'+n]={id:'table-'+n,number:n,kind:'table',zoneId:'first',row:n,column:1,active:true,accountId:''};
+ for(let n=1;n<=3;n++)state.tables['bar-'+n]={id:'bar-'+n,number:n,kind:'bar',zoneId:'bar',row:1,column:n,active:true,accountId:n===1?'a':''};
+ const original=structuredClone(state);let actor={id:'admin',role:'admin'};
+ const service=createDining({db:async()=>structuredClone(state),mutateDb:async(_,p,fn)=>{state=fn(structuredClone(state));return structuredClone(state)},identity:async()=>actor,json:x=>new Response(JSON.stringify(x))});
+ const call=(input)=>service.handle(new Request('https://test/api/dining',{method:'POST',body:JSON.stringify(input)}),{});
+ const migrate={action:'flattenSalon',operationId:'flat-one',expectedRevision:7};
+ actor.role='cashier';await assert.rejects(call(migrate),e=>e.status===403);
+ actor.role='admin';await assert.rejects(call({...migrate,expectedRevision:6}),e=>e.status===409);
+ await call(migrate);
+ assert.equal(state.layoutVersion,2);assert.equal(state.revision,8);
+ assert.deepEqual(Object.keys(state.zones),['salon']);assert.equal(Object.keys(state.tables).length,30);
+ assert.deepEqual(Object.values(state.tables).map(t=>t.number).sort((a,b)=>a-b),Array.from({length:30},(_,i)=>i+1));
+ assert(Object.values(state.tables).every(t=>t.kind==='table'&&t.zoneId==='salon'&&!t.temporary));
+ assert.equal(new Set(Object.values(state.tables).map(t=>t.row+':'+t.column)).size,30);
+ assert.equal(state.tables['bar-1'].number,21);assert.equal(state.tables['bar-1'].accountId,'a');
+ assert.deepEqual(state.accounts,original.accounts);assert.deepEqual(state.operations.old,original.operations.old);
+ const migrated=structuredClone(state);await call(migrate);assert.deepEqual(state,migrated,'Exact retry cannot migrate twice');
+ await assert.rejects(call({action:'saveZone',operationId:'old-zone',expectedRevision:8,zoneId:'first',name:'Piso'}),e=>e.status===409);
+ await assert.rejects(call({action:'saveTable',operationId:'old-bar',expectedRevision:8,tableId:'new-bar',table:{number:4,kind:'bar',zoneId:'salon',row:9,column:1,active:true}}),e=>e.status===409);
+ await call({action:'saveTable',operationId:'add31',expectedRevision:8,tableId:'table-31',table:{number:31,kind:'table',zoneId:'salon',row:8,column:3,active:true}});
+ assert.equal(Object.keys(state.tables).length,31);
+ const {restoreLayout,flattenLayout}=await import('../server/dining-layout.js');
+ // Down path restores configuration only, never old account links or transactions.
+ state.tables['bar-1'].accountId='';state.tables['table-31'].accountId='a';state.accounts.a.tableId='table-31';
+ const accounts=structuredClone(state.accounts),restored=restoreLayout(structuredClone(state));
+ assert.equal(restored.tables['bar-1'].kind,'bar');assert.equal(restored.tables['bar-1'].accountId,'');assert.equal(restored.tables['table-31'].accountId,'a');assert.deepEqual(restored.accounts,accounts);
+ assert(restored.zones.salon,'New tables retain a valid zone on rollback');
+ const custom=structuredClone(original);custom.tables['custom-21']={...custom.tables['table-1'],id:'custom-21',number:21};custom.tables['table-24']={...custom.tables['table-1'],id:'table-24',number:40,active:false};
+ flattenLayout(custom);assert.equal(custom.tables['custom-21'].number,21);assert.equal(custom.tables['table-24'].number,40);assert.equal(custom.tables['table-24'].active,false);assert.equal(new Set(Object.values(custom.tables).map(t=>t.number)).size,Object.keys(custom.tables).length);
+ console.log('PASS flat salon: 30 numbers, migration permissions/CAS/retry, occupied bars preserved, add 31, old clients rejected, collision-safe IDs and non-destructive rollback.');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,27 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync('_worker.js','utf8');
+const state={roles:{admin:'admin',cash:'cashier',disabled:'admin'},users:{'auth-admin':{},'auth-disabled':{active:false}},orders:{keep:{total:999}},analytics:{'2026-09-25':{events:{visit:30}},'2026-09-24':{events:{visit:10}}}};
+const clone=x=>x==null?x:structuredClone(x),get=p=>p.split('/').filter(Boolean).reduce((v,k)=>v?.[k],state)||null;
+const put=(p,v)=>{const parts=p.split('/').filter(Boolean),last=parts.pop();let target=state;for(const k of parts)target=target[k]??={};target[last]=clone(v)};
+const db=async(e,p)=>clone(get(p)),mutateDb=async(e,p,f)=>{const next=f(clone(get(p)));put(p,next);return clone(next)};
+const ctx={crypto:require('crypto').webcrypto,Date,Map,Set,JSON,db,mutateDb,analyticsAttempts:new Map(),FUNNEL_EVENTS:new Set(['visit']),hondurasDay:()=> '2026-09-25',body:r=>r.json(),json:(x,status=200)=>new Response(JSON.stringify(x),{status}),verifyFirebaseUser:async t=>{if(!t)throw Object.assign(Error('login'),{status:401});return {localId:t}}};
+vm.createContext(ctx);
+vm.runInContext(source.slice(source.indexOf('async function requireStaff('),source.indexOf('async function staffDirectory('))+source.slice(source.indexOf('function analyticsLimited('),source.indexOf('async function uploadDriverDocument(')),ctx);
+const request=(who,input={})=>new Request('https://test/api/analytics/reset',{method:'POST',headers:{Authorization:who?'Bearer '+who:''},body:JSON.stringify(input)});
+const payload={confirmation:'REINICIAR METRICAS',expectedResetId:'initial',requestId:'request-123456'};
+(async()=>{
+ await assert.rejects(()=>ctx.resetFunnel(request('',payload),{}),e=>e.status===401);
+ for(const role of ['cash','customer','disabled'])await assert.rejects(()=>ctx.resetFunnel(request(role,payload),{}),e=>e.status===403);
+ assert.equal((await ctx.resetFunnel(request('admin',{}),{})).status,400);
+ const first=await (await ctx.resetFunnel(request('admin',payload),{})).json();
+ assert.equal(state.analytics['2026-09-25'],undefined);
+ assert.equal(state.analytics._archives[first.resetId].days['2026-09-25'].events.visit,30);
+ assert.equal(state.orders.keep.total,999);
+ await ctx.recordFunnel(request('',{event:'visit',device:'mobile',mode:'browser'}),{});
+ assert.equal(state.analytics['2026-09-25'].events.visit,1);
+ await ctx.resetFunnel(request('admin',payload),{});assert.equal(state.analytics['2026-09-25'].events.visit,1);
+ await assert.rejects(()=>ctx.resetFunnel(request('admin',{...payload,requestId:'request-different'}),{}),e=>e.status===409);
+ assert.equal(state.analytics['2026-09-25'].events.visit,1);
+ const report=await (await ctx.funnelReport(request('admin'),{})).json();assert.equal(report.resetId,first.resetId);assert(!JSON.stringify(report).includes('archivedBy'));
+ console.log('Reset authorization, archive, replay safety, stale requests and sales isolation PASS');
+})().catch(e=>{console.error(e);process.exitCode=1});

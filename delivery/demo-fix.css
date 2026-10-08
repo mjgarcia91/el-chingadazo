@@ -1,0 +1,3 @@
+.demo-divider{display:flex;align-items:center;gap:10px;color:#66666d;font-size:11px;margin:5px 0}
+.demo-divider:before,.demo-divider:after{content:"";height:1px;background:#2d2d31;flex:1}
+.demo-button{width:100%;background:#222225!important;color:#ffd64b!important;border:1px solid #5e4d10!important;box-shadow:none!important}

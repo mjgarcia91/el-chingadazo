@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {createTestReset}=await import('../server/test-reset.js');
+ let state={settings:{open:false},users:{u:{points:500}},products:{p:{price:159}},ingredients:{i:{currentQty:20}},orders:{o:{id:'o',total:100,paidAt:'now'}},shifts:{s:{id:'s',closedAt:'now'}},deliveries:{o:{id:'o',status:'delivered'}}};
+ const original=structuredClone(state);let writes=0,race=false;
+ const api=createTestReset({identity:async r=>{const role=r.headers.get('Authorization');if(!role)throw Object.assign(Error('No autorizado'),{status:401});return {id:'admin-id',role}},json:(v,status=200)=>new Response(JSON.stringify(v),{status}),db:async(e,p)=>structuredClone(p?p.split('/').filter(Boolean).reduce((v,k)=>v?.[k],state):state),mutateDb:async(e,p,fn)=>{assert.equal(p,'');if(race)state.orders.new={id:'new'};const next=fn(structuredClone(state));state=next;writes++;return next;}});
+ const call=(role='admin',method='GET',body,path='')=>api.handle(new Request('https://test.local/api/test-reset'+path,{method,headers:role?{Authorization:role}: {},body:body?JSON.stringify(body):undefined}),{});
+ for(const role of [null,'cashier','kitchen','customer'])await assert.rejects(()=>call(role),e=>[401,403].includes(e.status));assert.equal(writes,0);
+ let preview=await (await call()).json();assert.equal(preview.counts.orders,1);
+ const payload=()=>({confirmation:'ARCHIVAR PRUEBAS',fingerprint:preview.fingerprint});
+ state.shifts.s.closedAt='';await assert.rejects(()=>call('admin','POST',payload()),e=>e.status===409);state.shifts.s.closedAt='now';
+ state.settings.open=true;await assert.rejects(()=>call('admin','POST',payload()),/CERRADO/);state.settings.open=false;
+ race=true;await assert.rejects(()=>call('admin','POST',payload()),/cambiaron/);race=false;assert.equal(writes,0);delete state.orders.new;
+ const result=await (await call('admin','POST',payload())).json();assert(result.ok);assert.equal(writes,1);
+ for(const key of ['users','products','ingredients'])assert.deepEqual(state[key],original[key]);assert.equal(state.settings.open,false);
+ assert(state.orders.o.testArchivedAt);assert.equal(state.orders.o.total,undefined);assert.equal(state.shifts.s.closedAt,result.at);
+ const backup=await (await call('admin','GET',undefined,'?archive='+result.archiveId)).json();assert.deepEqual(backup.orders,original.orders);assert.deepEqual(backup.deliveries,original.deliveries);assert(!backup.users);
+ preview=await (await call()).json();assert.equal(preview.counts.orders,0);assert.equal(preview.counts.shifts,0);await assert.rejects(()=>call('admin','POST',payload()),/No hay/);assert.equal(writes,1);
+ console.log('PASS reset: admin only, preview, closed shifts, paused ordering, race rejection, atomic backup, preserved catalog/accounts/stock and no repeated reset. Firebase CAS mocked.');
+})().catch(e=>{console.error(e);process.exitCode=1});

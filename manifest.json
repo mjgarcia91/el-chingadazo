@@ -1,0 +1,20 @@
+{
+  "name": "El Chingadazo",
+  "short_name": "El Chingadazo",
+  "description": "Pedidos en línea de comida catracha mexicana",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0b0c",
+  "theme_color": "#0b0b0c",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/assets/logo.jpg",
+      "sizes": "960x960",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

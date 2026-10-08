@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const read=n=>fs.readFileSync('android/src/hn/chingadazo/pos/'+n+'.java','utf8');
+const ui=read('NativeTablesView');
+assert.match(ui,/button\("Liberar mesa"/);
+assert.match(ui,/!busy&&pending==null&&pendingChange==null&&ready/,'paid predicate and neither release nor table change in flight');
+assert.match(ui,/Agregar mesa/);assert.match(ui,/Editar número \/ posición/);assert.match(ui,/Trasladar cuenta a otra mesa/);
+assert.match(ui,/if\(!admin\|\|!canChange\(\)\)return/,'layout edits require admin');
+assert.match(ui,/state\.pending\(selected\)/,'display remote pending balance');
+assert.match(ui,/Consultar liberación pendiente/);
+assert.match(read('NativePosActivity'),/new NativeTablesView/,'integrated entry point');
+assert.match(read('NativeDraftStore'),/"releases-v1":"drafts-v1"/,'journal cannot overwrite drafts');
+assert.doesNotMatch(ui,/\.checkout\(|\.print\(|RawBT|android\.webkit/,'table view cannot charge or print');
+console.log('Native table button, navigation and storage separation PASS');

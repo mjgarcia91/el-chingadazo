@@ -1,0 +1,40 @@
+const assert = require('node:assert/strict');
+(async () => {
+  await import('../js/continuity.js');
+  const saved = new Map(), held = new Set();
+  const storage = { read: async key => structuredClone(saved.get(key) || null), write: async (key,value) => saved.set(key,structuredClone(value)) };
+  const locks = { request: async (key, options, fn) => {
+    if(held.has(key)) return fn(null);
+    held.add(key); try { return await fn({name:key}); } finally { held.delete(key); }
+  } };
+  const first = ChingadazoContinuity.create({storage,locks});
+  assert.equal(await first.open('auth-one'),null);
+  await first.save({posTicket:[{productId:'p',qty:2,unit:55,note:'Sin chile'}],posName:'Prueba',posPay:'Efectivo',posPayWith:'',posChannel:'mostrador',token:'secret'});
+  const second = ChingadazoContinuity.create({storage,locks});
+  await assert.rejects(second.open('auth-one'),/otra pestaña/);
+  await first.close();
+  const restored = await second.open('auth-one');
+  assert.equal(restored.posTicket[0].note,'Sin chile');
+  assert.equal(restored.posTicket[0].qty * restored.posTicket[0].unit,110);
+  assert.equal(restored.token,undefined);
+  const intent = {id:'ord-one',items:[{productId:'p',qty:2,unit:55}],total:110,shiftId:'shift-one'};
+  await second.prepare(intent);
+  await assert.rejects(second.save({posTicket:[]}),/sin confirmar/);
+  await second.close();
+  const pending = await first.open('auth-one');
+  assert.deepEqual(pending.pendingPosOrder,intent);
+  await assert.rejects(first.confirm('ord-other'),/identificador/);
+  await first.confirm('ord-one');
+  await first.close();
+  assert.equal((await second.open('auth-one')).posTicket.length,0);
+  await second.close();
+  assert.equal(await second.open('auth-two'),null,'No recovery of another employee');
+  await second.close();
+  const broken = ChingadazoContinuity.create({storage:{read:async()=>null,write:async()=>{throw Error('quota');}},locks});
+  await broken.open('auth-three');
+  await assert.rejects(broken.save({posTicket:[]}),/quota/);
+  await broken.close();
+  const incompatible = ChingadazoContinuity.create({storage,locks:null});
+  await assert.rejects(incompatible.open('auth-four'),/navegador/);
+  console.log('PASS continuity: recovery, operator isolation, tab lock, immutable intent, matching confirmation, quota failure.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

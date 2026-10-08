@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {createDining}=await import('../server/dining.js'),{createDiningCheckout}=await import('../server/dining-checkout.js'),{createAccess}=await import('../server/access.js'),{createManager}=await import('../server/manager.js');
+ let root={products:{p:{id:'p',name:'Taco',price:50,available:true}},shifts:{s:{id:'s',userId:'cash'}},recipes:{r:{productId:'p',yieldQty:1,ingredients:[{ingredientId:'i',qty:1}]}},ingredients:{i:{id:'i',currentQty:20,currentCost:10}}},queue=Promise.resolve(),seq=0;
+ const get=p=>p.split('/').filter(Boolean).reduce((v,k)=>v?.[k],root);
+ const set=(p,v)=>{const ks=p.split('/').filter(Boolean),last=ks.pop();let n=root;for(const k of ks)n=n[k]||={};n[last]=v;return structuredClone(v)};
+ const db=async(_,p,opts)=>opts?set(p,JSON.parse(opts.body)):structuredClone(get(p)||null);
+ const mutateDb=(_,p,fn)=>{const run=queue.then(()=>set(p,fn(structuredClone(get(p)||null))));queue=run.catch(()=>{});return run};
+ const manager=createManager({db,mutateDb}),access=createAccess({db,mutateDb}),checkout=createDiningCheckout({db,mutateDb,isShiftExpired:()=>false,recordSale:manager.recordSale});
+ const actor={id:'cash',role:'admin'},service=createDining({db,mutateDb,identity:async()=>actor,json:x=>new Response(JSON.stringify(x)),quoteItems:access.quoteItems,checkout,consumptionsEnabled:true});
+ const call=async(action,fields={})=>{const command={action,operationId:'op'+(++seq),expectedRevision:root.dining?.revision||0,...fields};return (await service.handle(new Request('https://test.local/api/dining',{method:'POST',body:JSON.stringify(command)}),{})).json()};
+ await call('initialize');await call('consume',{tableId:'table-1',items:[{productId:'p',qty:2,unit:50}]});const id=root.dining.tables['table-1'].accountId;
+ root.products.p.price=75;await call('consume',{tableId:'table-1',accountId:id,items:[{productId:'p',qty:1,unit:75}]});
+ const command={action:'checkout',operationId:'pay',expectedRevision:root.dining.revision,accountId:id,payment:'Efectivo',payWith:200,shiftId:'s'};
+ await checkout.run({},actor,command);await checkout.run({},actor,command);
+ assert.equal(root.dining.accounts[id].total,175);assert.equal(Object.keys(root.orders).length,1);assert.equal(Object.values(root.orders)[0].total,175);assert.equal(Object.values(root.orders)[0].shiftId,'s');
+ assert.equal(root.ingredients.i.currentQty,17);assert.equal(Object.keys(root.dining.accounts[id].batches).length,2);assert.equal(root.dining.tables['table-1'].accountId,id);
+ await call('release',{accountId:id});assert.equal(root.dining.tables['table-1'].accountId,'');
+ await assert.rejects(access.createOrder({},actor,'dining-fake',{diningAccountId:id}),e=>e.status===409);
+ console.log('PASS complete real services: two incremental batches, immutable historical prices, one paid sale/shift, inventory deducted exactly once, explicit release.');
+})().catch(e=>{console.error(e);process.exitCode=1});

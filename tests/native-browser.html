@@ -1,0 +1,20 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Prueba local APK</title><body>
+<h1>Puente APK · prueba aislada</h1><p>Sin ventas, sin servidor de producción y sin impresora real.</p>
+<button id="test">Probar ticket, gaveta y desconexión</button><pre id="result" role="status">Listo</pre>
+<script>Object.defineProperty(navigator,'userAgent',{value:navigator.userAgent+' ChingadazoPOS/1'});</script>
+<script src="/js/native-bridge.js"></script><script src="/js/printer.js"></script>
+<script>
+const channel=new MessageChannel();let fail=false;const actions=[];
+channel.port1.onmessage=e=>{const r=JSON.parse(e.data);actions.push(r.action);channel.port1.postMessage(JSON.stringify(fail?{id:r.id,error:'Desconexión simulada'}:{id:r.id,result:{configured:true,connected:true,accepted:true}}));};
+const nonce='0123456789abcdef0123456789abcdef';ChingadazoNative.prepare(nonce);window.postMessage('chingadazo-native-v1:'+nonce,location.origin,[channel.port2]);
+document.getElementById('test').onclick=async()=>{
+ const result=document.getElementById('result');try{
+  actions.length=0;fail=false;localStorage.setItem('chingadazo_printer_transport_v1','rawbt');
+  const status=await ChingadazoPrinter.status();if(!status.connected||ChingadazoPrinter.transport()!=='native')throw Error('No priorizó nativo');
+  await ChingadazoPrinter.connect();await ChingadazoPrinter.print({code:'TEST',items:[{name:'Taco',qty:1,unit:10}],total:10},'client',{});await ChingadazoPrinter.drawer();
+  fail=true;try{await ChingadazoPrinter.drawer();throw Error('Falta error');}catch(e){if(!e.message.includes('simulada'))throw e;}
+  if(document.querySelector('#rawbt-jobs'))throw Error('Bandeja RawBT inesperada');
+  result.textContent='PASS: nativo prioritario, ticket y gaveta enviados una vez, desconexión sin reintento ni RawBT.\nAcciones: '+actions.join(', ');
+ }catch(e){result.textContent='FAIL: '+e.message;}
+};
+</script></body></html>

@@ -1,0 +1,3 @@
+const http=require('node:http'),fs=require('node:fs');
+const routes={'/':'tests/cash-recovery-browser.html','/fixture.js':'tests/cash-recovery-fixture.js','/js/cash-screens.js':'js/cash-screens.js','/js/dining.js':'js/dining.js','/css/styles.css':'css/styles.css','/css/dining.css':'css/dining.css'};
+http.createServer((req,res)=>{const file=routes[new URL(req.url,'http://localhost').pathname];if(!file){res.writeHead(404);return res.end();}res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8');res.end(fs.readFileSync(file));}).listen(4182,'127.0.0.1',()=>console.log('http://127.0.0.1:4182'));

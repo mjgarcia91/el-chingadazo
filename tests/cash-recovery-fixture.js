@@ -1,0 +1,4 @@
+let pane='sale';
+CashScreens.mount(document.querySelector('main'),{getPane:()=>pane,setPane:v=>pane=v,busy:()=>true,table:()=>true,ticket:()=>[],total:()=>0,ready:()=>false});
+const state={initialized:true,layoutVersion:2,consumptionsEnabled:true,revision:1,tables:{t:{id:'t',number:21,row:1,column:1,active:true,accountId:'a'}},accounts:{a:{id:'a',tableId:'t',status:'paid',total:433,items:[{name:'Cuenta sintética',qty:1,unit:433}],openedAt:new Date().toISOString()}}};
+DiningUI.mount(document.querySelector('#salon'),{user:{id:'synthetic',role:'admin'},isActive:()=>true,api:async(path,options)=>{if(options){const c=JSON.parse(options.body);if(c.action!=='release')throw Error('Solo liberación sintética');state.accounts={};state.tables.t.accountId='';state.revision++;state.operationId=c.operationId;document.querySelector('#result').textContent='PASS: mesa liberada sin crear un cobro';}return structuredClone(state);}});

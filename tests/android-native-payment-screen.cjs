@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const read=n=>fs.readFileSync('android/src/hn/chingadazo/pos/'+n+'.java','utf8');
+const view=read('NativePaymentsView');
+assert.match(view,/Cobrar e imprimir/);assert.match(view,/Cobrar sin imprimir/);
+assert.match(view,/service\.table\(/);assert.match(view,/service\.recover\(/);
+assert.match(view,/service\.finish\(/);assert.match(view,/screen\.finish\(/);
+assert.match(view,/counter\.start\(/);assert.match(view,/counter\.recover\(/);assert.match(view,/counter\.finish\(/);
+assert.match(view,/Imprimir copia/);assert.match(view,/usb\.effects\.copy\(/);
+assert.match(read('NativeSalesView'),/Cobrar cuenta de mostrador/);
+assert.match(read('NativeHttp'),/CREATE_ORDER/);
+assert.match(view,/pending!=null/);assert.match(view,/paid/);
+assert.doesNotMatch(view,/android\.webkit|RawBT|\.checkout\(/);
+assert.match(read('NativePosActivity'),/new NativePaymentsView/);
+assert.match(read('NativeDraftStore'),/"payments"/);assert.match(read('NativeDraftStore'),/"effects"/);
+console.log('Native payment screen wiring and recovery boundaries PASS');

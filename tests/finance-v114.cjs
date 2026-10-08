@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {financeReport,defaultFinanceConfig,createFinance,validateConfig}=await import('../server/finance.js');
+ const cfg=defaultFinanceConfig();cfg.app.start='2026-09-01';
+ const o=(id,total,extra={})=>({id,code:id,status:'entregado',invoiced:true,paidAt:'2026-09-10T18:00:00Z',total,payment:'Tarjeta',source:'app',paidBy:'auth-cash',items:[{productId:'t',name:'Torta',unit:100,qty:1}],...extra});
+ const rows=[o('pos',100),o('online',200,{paymentChannel:'online',gatewayPayment:{status:'captured',verified:true,transactionId:'bank-1'}}),o('cash',50,{payment:'Efectivo'}),o('unpaid',900,{paidAt:''}),o('cancel',100,{status:'cancelado'}),o('edge',10,{paidAt:'2026-09-01T05:59:59Z'}),o('last',20,{paidAt:'2026-10-01T05:59:59Z'}),o('after',400,{paidAt:'2026-10-01T06:00:00Z'}),o('unknown',30,{paidBy:''})];
+ const db={orders:Object.fromEntries(rows.map(x=>[x.id,x])),products:{t:{id:'t',category:'mex'}},categories:{mex:{id:'mex',name:'Mexicana'}}};
+ const r=financeReport(db,cfg,'2026-09-01','2026-09-30');
+ assert.equal(r.count,5);assert.equal(r.gross,40000);assert.equal(r.cards.pos.count,2);assert.equal(r.cards.pos.gross,12000);assert.equal(r.cards.pos.commission,270);assert.equal(r.cards.pos.net,11730);
+ assert.equal(r.cards.app.count,1);assert.equal(r.cards.app.commission,410);assert.equal(r.cards.app.transactionFees,398);assert.equal(r.cards.app.net,19192);assert.equal(r.cards.app.monthly,119250);assert.equal(r.cards.pos.monthly,95000);
+ assert.equal(r.cards.unknown.gross,3000);assert.equal(r.cancelledPaid.count,1);assert.equal(r.cancelledPaid.gross,10000);
+ assert.equal(r.payments.reduce((s,x)=>s+x.amount,0),r.gross);assert.equal(r.channels.find(x=>x.label==='App').count,5);
+ assert.equal(financeReport({orders:[]},cfg,'2026-09-01','2026-09-01').cards.pos.monthly,3167);
+ assert.equal(financeReport({orders:[]},defaultFinanceConfig(),'2026-09-01','2026-09-30').cards.app.monthly,0);
+ assert.throws(()=>financeReport(db,cfg,'2026-02-30','2026-03-01'));
+ assert.throws(()=>financeReport(db,cfg,'2026-10-01','2026-09-01'));
+ assert.throws(()=>validateConfig({...cfg,fx:0}));assert.throws(()=>validateConfig({...cfg,pos:{...cfg.pos,percent:-1}}));
+ const fake=financeReport({orders:[o('fake',50,{paymentChannel:'online'})]},cfg,'2026-09-01','2026-09-30');assert.equal(fake.cards.app.count,0);assert.equal(fake.cards.unknown.count,1);
+ let writes=0;const api=createFinance({identity:async req=>req.headers.get('Authorization')?{role:req.headers.get('Authorization'),id:'u'}:null,db:async(_e,p,init)=>{if(init){writes++;return JSON.parse(init.body)}return p==='/financeConfig'?cfg:db[p.slice(1)]},json:(x,status=200)=>new Response(JSON.stringify(x),{status})});
+ const req=(role,method='GET',body)=>new Request('https://test/api/finance?from=2026-09-01&to=2026-09-30',{method,headers:role?{Authorization:role}:{},...(body?{body:JSON.stringify(body)}:{})});
+ for(const role of ['', 'customer','cashier','kitchen'])await assert.rejects(()=>api.handle(req(role),{}),e=>[401,403].includes(e.status));
+ const response=await api.handle(req('admin'),{});assert.equal(response.status,200);assert.equal((await response.json()).report.gross,40000);
+ await api.handle(req('admin','POST',cfg),{});assert.equal(writes,1);
+ console.log('PASS finance: fechas Honduras, conteos, clasificación física/online, comisiones centavos, mensualidad, cancelados, validación y permisos.');
+})().catch(e=>{console.error(e);process.exitCode=1});

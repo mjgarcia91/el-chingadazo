@@ -1,0 +1,27 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
+const read=p=>fs.readFileSync(p,'utf8');
+(async()=>{
+ const alerts=[],w={alert:s=>alerts.push(s)};
+ vm.runInNewContext(read('js/messages.js'),{window:w});
+ w.alert('Firebase: Error (auth/internal-error).');
+ w.alert('No hay cambio suficiente.');
+ assert(!/firebase|auth\//i.test(alerts[0]));assert.equal(alerts[1],'No hay cambio suficiente.');
+ const sdk={initializeApp:()=>({}),getAuth:()=>({authStateReady:async()=>{}}),setPersistence:async()=>{}};
+ let auth=read('js/auth.js');auth=auth.replace(/Promise\.all\(\[[\s\S]*?\]\)/,'Promise.resolve([sdk,sdk])');
+ vm.runInNewContext(auth,{window:w,sdk,CHINGADAZO_CONFIG:{configured:true,firebase:{}}});await w.AuthBridge.ready;
+ for(const code of ['auth/internal-error','auth/unauthorized-domain','auth/operation-not-allowed','auth/network-request-failed','auth/unknown'])assert(!/firebase|auth\//i.test(w.AuthBridge.message({code,message:'Firebase: '+code})));
+ assert(!/firebase/i.test(w.AuthBridge.message(new Error('Firebase failure'))));
+ const app=read('js/app.js');
+ const section=app.slice(app.indexOf('let googleAccessBusy ='),app.indexOf('async function refreshVerifiedBonus()'));
+ let resolve,calls=0,route,profile=null;
+ const button={disabled:false,setAttribute(){},removeAttribute(){}};
+ const ctx={document:{querySelectorAll:()=>[button]},AuthBridge:{signInGoogle:()=>{calls++;return new Promise(r=>resolve=r)},message:()=> 'Intenta nuevamente'},PrivateSession:{clear(){}},window:{Cloud:true},Cloud:{sync:async()=>{}},Store:{get:()=>({users:profile?[profile]:[]})},STATE:{},go:r=>route=r,alert:()=>{},finishAuthLogin:async()=>{route='login'},customerProfileComplete:p=>!!p.complete};
+ vm.createContext(ctx);vm.runInContext(section,ctx);
+ const first=ctx.googleAccess();await ctx.googleAccess();assert.equal(calls,1);assert(button.disabled);
+ resolve({uid:'new-user'});await first;assert.equal(route,'register');assert(!button.disabled);
+ profile={id:'auth-new-user',role:'customer',complete:false};const next=ctx.googleAccess();resolve({uid:'new-user'});await next;assert.equal(route,'register');
+ profile.complete=true;const last=ctx.googleAccess();resolve({uid:'new-user'});await last;assert.equal(route,'login');
+ for(const entry of ['index.html','personal.html','delivery/index.html'])assert(read(entry).indexOf('messages.js')<read(entry).indexOf('auth.js'));
+ assert(app.includes('class="google-mark"'));assert(fs.existsSync('icons/google.svg'));
+ console.log('Friendly errors, single popup, complete-profile route and provider mark passed.');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,3 @@
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path');
+const files={'/':'tests/rawbt-browser.html','/js/printer.js':'js/printer.js','/css/styles.css':'css/styles.css'};
+http.createServer((req,res)=>{const name=files[new URL(req.url,'http://localhost').pathname];if(!name){res.writeHead(404);return res.end();}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html; charset=utf-8');res.end(fs.readFileSync(path.join(__dirname,'..',name)));}).listen(4176,'127.0.0.1',()=>console.log('RawBT fixture: http://127.0.0.1:4176'));

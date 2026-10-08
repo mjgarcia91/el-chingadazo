@@ -1,0 +1,27 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+(async()=>{
+ const {createDining}=await import('../server/dining.js'),{createAccess}=await import('../server/access.js');
+ let state=null,loseReply=false;const actor={id:'synthetic',role:'admin'},products=[{id:'taco',name:'Taco',price:50,available:true}];
+ const db=async(_,path)=>structuredClone(path==='/products'?products:state),json=x=>new Response(JSON.stringify(x));
+ const service=createDining({db,mutateDb:async(_,path,fn)=>{state=fn(structuredClone(state));return structuredClone(state)},identity:async()=>actor,json,consumptionsEnabled:true,quoteItems:createAccess({db}).quoteItems});
+ const api=async(path,options={})=>{const result=await service.handle(new Request('https://test.local'+path,options),{});if(loseReply&&options.method==='POST'){loseReply=false;throw Error('Respuesta perdida después de guardar');}return result.json()};
+ await api('/api/dining',{method:'POST',body:JSON.stringify({action:'initialize',operationId:'initial',expectedRevision:0})});
+ const dom=new JSDOM('<main id="diningRoot"></main>',{url:'https://test.local',runScripts:'outside-only'}),w=dom.window;
+ w.navigator.locks={request:async(_,options,fn)=>fn({})};w.eval(fs.readFileSync('js/dining-composer.js','utf8'));w.eval(fs.readFileSync('js/dining.js','utf8'));
+ w.DiningUI.mount(w.document.querySelector('main'),{user:actor,api,isActive:()=>true,products:()=>products});
+ const tick=()=>new Promise(r=>setTimeout(r,10));await tick();
+ w.document.querySelector('[data-dining-table="table-1"]').click();await tick();
+ assert(w.document.querySelector('[name="product"]'),'Selected table must offer real product entry');
+ const product=w.document.querySelector('[name="product"]');product.value='taco';product.dispatchEvent(new w.Event('change',{bubbles:true}));
+ w.document.querySelector('[name="note"]').value='Nota en preparación';
+ w.document.querySelector('[data-dining-action="refresh"]').focus();w.document.querySelector('[data-dining-action="refresh"]').click();await tick();
+ assert.equal(w.document.querySelector('[name="note"]')?.value,'Nota en preparación','Refreshing salon must preserve an unfinished product form');
+ w.document.querySelector('#diningComposer form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+ loseReply=true;w.document.querySelector('[data-consumption-send]').click();await tick();await tick();
+ assert(w.document.querySelector('[data-dining-action="retry"]'),'Unknown response keeps exact pending command');
+ assert.equal(w.localStorage.length,2,'Draft and pending intent survive lost reply');
+ w.document.querySelector('[data-dining-action="retry"]').click();await tick();await tick();
+ const account=state.accounts[state.tables['table-1'].accountId];assert.equal(account.total,50);assert.equal(Object.keys(account.batches).length,1);
+ assert.match(w.document.querySelector('main').textContent,/Saldo.*50/);assert.equal(w.localStorage.length,0,'Confirmed draft and pending journal are cleared');
+ w.DiningUI.stop();w.close();console.log('PASS actual DiningUI + composer + service + menu validation: first consumption creates account and one batch, then shows balance.');
+})().catch(e=>{console.error(e);process.exit(1)});

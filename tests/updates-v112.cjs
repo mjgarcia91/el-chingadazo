@@ -1,0 +1,61 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const root=path.join(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const clone=x=>x==null?x:structuredClone(x);
+const state={roles:{admin:'admin',cash:'cashier',customer:'customer',other:'customer'},users:{'auth-admin':{id:'auth-admin',authUid:'admin',name:'Admin',role:'admin',active:true},'auth-cash':{id:'auth-cash',authUid:'cash',name:'Cajero',role:'cashier',active:true},'auth-customer':{id:'auth-customer',role:'customer',active:true,points:10},'auth-other':{id:'auth-other',role:'customer',active:true,points:0}},staffPins:{hash:{uid:'cash',active:true,name:'Cajero'}},staffPinByUid:{cash:'hash'},shifts:{},orders:{o1:{id:'o1',userId:'auth-customer',status:'entregado',invoiced:true,paidAt:new Date().toISOString(),total:100},o2:{id:'o2',userId:'auth-other',status:'entregado',invoiced:true,paidAt:new Date().toISOString(),total:100}}};
+function get(p){return p.split('/').filter(Boolean).reduce((v,k)=>v?.[k],state)??null;}
+function set(p,v){if(!p){for(const k of Object.keys(state))delete state[k];Object.assign(state,clone(v));return;}const parts=p.split('/').filter(Boolean),last=parts.pop();let n=state;for(const k of parts)n=n[k]||={};if(v===null)delete n[last];else n[last]=clone(v);}
+const db=async(_env,p,init)=>{if(init){const data=init.body?JSON.parse(init.body):null;if(init.method==='PATCH'){for(const [k,v]of Object.entries(data))set(p+'/'+k,v);}else set(p,data);}return clone(get(p));};
+// Serializing emulates successful CAS retries when concurrent requests contend.
+let queue=Promise.resolve();
+const mutateDb=(_env,p,fn)=>{const run=queue.then(()=>{const next=fn(clone(get(p)));set(p,next);return clone(next);});queue=run.catch(()=>{});return run;};
+const req=(actor,data,method='POST')=>new Request('https://test.local/api/instagram-stories',{method,headers:{Authorization:actor?'Bearer '+actor:'','Content-Type':'application/json'},...(method==='GET'?{}:{body:JSON.stringify(data)})});
+const identity=async r=>{const actor=r.headers.get('Authorization').replace('Bearer ','');if(!actor)return null;const p=state.users['auth-'+actor];if(!p||p.active===false)throw Object.assign(Error('inactive'),{status:403});return{id:'auth-'+actor,role:state.roles[actor]||'customer',user:{localId:actor,emailVerified:true}};};
+const requireStaff=async r=>{const a=await identity(r);if(a?.role!=='admin')throw Object.assign(Error('denied'),{status:403});return{...a,actor:a.id};};
+const json=(p,status=200)=>new Response(JSON.stringify(p),{status});
+(async()=>{
+ const {createUpdates}=await import('../server/updates-v112.js');const api=createUpdates({db,mutateDb,identity,requireStaff,json,proofInfo:async(e,k)=>{if(k!=='proof-test')throw Object.assign(Error('missing proof'),{status:400});return {key:k,expiresAt:new Date(Date.now()+7*86400000).toISOString()};}});
+ await assert.rejects(()=>api.staff(req('cash',{action:'rename',userId:'auth-admin',name:'Hacked'}),{}),e=>e.status===403);
+ await api.staff(req('admin',{action:'rename',userId:'auth-cash',name:'Ana López'}),{});
+ assert.equal(state.users['auth-cash'].name,'Ana López');assert.equal(state.staffPins.hash.name,'Ana López');
+ await assert.rejects(()=>api.staff(req('admin',{action:'remove',userId:'auth-admin'}),{}),e=>e.status===409);
+ await assert.rejects(()=>api.staff(req('admin',{action:'rename',userId:'auth-cash',name:'<img>'}),{}),e=>e.status===400);
+ state.shifts.open={userId:'auth-cash'};
+ await assert.rejects(()=>api.staff(req('admin',{action:'remove',userId:'auth-cash'}),{}),e=>e.status===409);
+ state.shifts.open.closedAt=new Date().toISOString();
+ const originalOrders=clone(state.orders);await api.staff(req('admin',{action:'remove',userId:'auth-cash'}),{});
+ assert.equal(state.users['auth-cash'].active,false);assert.equal(state.roles.cash,undefined);assert.equal(state.staffPins.hash,undefined);assert.deepEqual(state.orders,originalOrders);
+ await assert.rejects(()=>identity(req('cash',{})),e=>e.status===403);
+ console.log('PASS personal: permisos, renombrar, PIN sincronizado, turno abierto, autoeliminación y revocación conservando ventas.');
+ const submit={publishedAt:new Date(Date.now()-23.5*3600000).toISOString(),proofKey:'proof-test',action:'submit',orderId:'o1',handle:'cliente',followers:500,url:'https://www.instagram.com/stories/cliente/123456/',accepted:true};
+ await assert.rejects(()=>api.stories(req('',submit),{}),e=>e.status===401);
+ await assert.rejects(()=>api.stories(req('other',submit),{}),e=>e.status===409);
+ await assert.rejects(()=>api.stories(req('customer',{...submit,followers:499}),{}),e=>e.status===400);
+ await assert.rejects(()=>api.stories(req('customer',{...submit,url:'https://instagram.com.evil.test/stories/cliente/123456/'}),{}),e=>e.status===400);
+ await assert.rejects(()=>api.stories(req('customer',{...submit,publishedAt:new Date().toISOString()}),{}),e=>e.status===409);
+ await assert.rejects(()=>api.stories(req('customer',{...submit,proofKey:''}),{}),e=>e.status===400);
+ await api.stories(req('customer',submit),{});assert.equal(Date.parse(state.users['auth-customer'].storyRequests.o1.eligibleAt)-Date.parse(submit.publishedAt),86400000);assert.equal(state.users['auth-customer'].points,10);
+ const review={action:'approve',userId:'auth-customer',orderId:'o1',reason:'Historia inicial y archivo con fecha, seguidores y pedido revisados.',verified:true};
+ await assert.rejects(()=>api.stories(req('customer',review),{}),e=>e.status===403);
+ await assert.rejects(()=>api.stories(req('admin',review),{}),e=>e.status===409);
+ await assert.rejects(()=>api.stories(req('customer',submit),{}),e=>e.status===409);
+ await assert.rejects(()=>api.stories(req('other',{...submit,orderId:'o2'}),{}),e=>e.status===409);
+ const mine=await(await api.stories(req('other',null,'GET'),{})).json();assert.equal(mine.requests.length,0);
+ state.users['auth-customer'].storyRequests.o1.eligibleAt=new Date(Date.now()-1).toISOString();
+ await assert.rejects(()=>api.stories(req('admin',{...review,verified:false}),{}),e=>e.status===400);
+ await Promise.all([api.stories(req('admin',review),{}),api.stories(req('admin',review),{})]);
+ assert.equal(state.users['auth-customer'].points,310);assert.equal(state.users['auth-customer'].storyRequests.o1.status,'approved');
+ state.orders.o3={...state.orders.o1,id:'o3'};
+ await assert.rejects(()=>api.stories(req('customer',{...submit,orderId:'o3',url:'https://www.instagram.com/stories/cliente/987654/'}),{}),e=>e.status===409);
+ console.log('PASS historias: propietario, 500 seguidores, enlace, aislamiento, 24 horas, aprobación manual y doble solicitud concurrente sin duplicar puntos.');
+ const ctx=vm.createContext({console,Intl,Date,Store:{get:()=>({settings:{}})}});vm.runInContext(read('js/ops.js'),ctx);
+ const order=(id,paidAt,total=100)=>({id,paidAt,createdAt:paidAt,invoiced:true,status:'entregado',total,payment:'Efectivo',items:[{name:'Torta',qty:1,unit:100}]});
+ ctx.fixture={orders:[order('before','2026-09-01T05:59:59Z'),order('first','2026-09-01T06:00:00Z'),order('last','2026-09-03T05:59:59Z'),order('after','2026-09-03T06:00:00Z'),{...order('cancelled','2026-09-02T12:00:00Z'),status:'cancelado'},{...order('unpaid','2026-09-02T12:00:00Z'),invoiced:false}],shifts:[]};
+ const report=vm.runInContext("dayReport(fixture,'2026-09-01','2026-09-02')",ctx);assert.equal(report.n,2);assert.equal(report.collected,200);assert.equal(report.pay.Efectivo,200);
+ assert.equal(vm.runInContext("dayReport(fixture,'2026-09-01')",ctx).n,1);
+ console.log('PASS ventas: rango inclusivo, medianoche Honduras, fechas límites, cancelados y no facturados.');
+ const html=read('informacion.html');for(const anchor of ['contacto','entrega','cancelaciones','devoluciones','privacidad','terminos','pagos'])assert(html.includes('id="'+anchor+'"'));
+ for(const page of ['index.html','personal.html']){const s=read(page);const dependency=s.indexOf('updates-v112.js'),app=s.indexOf('js/app.js');assert(dependency>=0 && app>dependency,page+' must load updates before app');}
+ assert(read('sw.js').includes('/js/updates-v112.js?v=117'));
+ assert.match(read('js/app.js'),/autoPrintEnabled\(\)\?"green":"gold"/);
+ console.log('PASS información pública, recursos y acción verde de facturación.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
+(async () => {
+  const { JSDOM } = await import('jsdom');
+  const app = fs.readFileSync('js/app.js', 'utf8');
+  const context = vm.createContext({ STATE: {}, canAdmin: () => true, escapeHtml: s => String(s).replaceAll('<','&lt;'), fmtHn: s => s });
+  const start = app.indexOf('function backupPanel()');
+  assert(start >= 0, 'Backup panel exists');
+  vm.runInContext(app.slice(start, app.indexOf('async function updateBackupPanel', start)), context);
+  let dom = new JSDOM(context.backupPanel());
+  assert.match(dom.window.document.body.textContent, /Consultar estado/);
+  context.STATE.backupStatus = { configured: true, dailyEnabled: false, lastSuccess: null };
+  dom = new JSDOM(context.backupPanel());
+  assert.match(dom.window.document.body.textContent, /Sin copia verificada/);
+  assert.equal(dom.window.document.querySelector('[data-backup-create]').disabled, false);
+  context.STATE.backupBusy = true;
+  assert.equal(new JSDOM(context.backupPanel()).window.document.querySelector('[data-backup-create]').disabled, true);
+  context.STATE.backupBusy = false;
+  context.STATE.backupStatus.lastSuccess = { createdAt: '2026-09-28T12:00:00Z', verified: true };
+  context.STATE.backupStatus.lastError = '<script>bad</script>';
+  dom = new JSDOM(context.backupPanel());
+  assert.equal(dom.window.document.querySelector('script'), null);
+  assert.match(dom.window.document.body.textContent, /Última copia verificada/);
+  console.log('PASS backup panel: empty, busy, verified, error, escaped content.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

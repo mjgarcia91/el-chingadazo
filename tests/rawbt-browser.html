@@ -1,0 +1,4 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Prueba local RawBT</title><link rel="stylesheet" href="/css/styles.css"><body><h1>Prueba local · sin ventas ni impresora real</h1><button class="btn gold" id="queue">Preparar tickets y gaveta</button><p id="result"></p><script src="/js/printer.js"></script><script>
+Object.defineProperty(navigator,'userAgent',{value:'Android fixture'});
+document.getElementById('queue').onclick=async()=>{ChingadazoPrinter.setTransport('rawbt');const order={code:'PRUEBA-LOCAL',items:[{name:'Taco de prueba',qty:1,unit:10}],total:10};await ChingadazoPrinter.print(order,'kitchen',{});await ChingadazoPrinter.print(order,'client',{});await ChingadazoPrinter.drawer();document.getElementById('result').textContent='Tres envíos preparados; ninguno enviado al hardware.';};
+</script></body></html>

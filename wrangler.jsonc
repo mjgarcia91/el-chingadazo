@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "el-chingadazo",
+  "main": "./_worker.js",
+  "compatibility_date": "2026-09-05",
+  "workers_dev": true,
+  "routes": [],
+  "vars": { "BACKUP_DAILY_ENABLED": "true", "DINING_CONSUMPTIONS_ENABLED": "true" },
+  "triggers": {
+    "crons": ["0 9 * * *", "*/5 * * * *"]
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "run_worker_first": [
+      "/",
+      "/api/*",
+      "/personal",
+      "/personal/",
+      "/delivery",
+      "/delivery/",
+      "/internal/*",
+      "/server/*",
+      "/tests/*"
+    ]
+  },
+  "r2_buckets": [
+    {
+      "binding": "DRIVER_DOCS",
+      "bucket_name": "el-chingadazo-private-documents"
+    },
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "el-chingadazo-private-backups"
+    }
+  ]
+}

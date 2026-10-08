@@ -1,0 +1,12 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prueba aislada de continuidad</title>
+<style>body{font:18px system-ui;background:#111;color:#fff;max-width:800px;margin:3rem auto;padding:1rem}button{font:inherit;padding:1rem;margin:.5rem;background:#ffdf32;color:#111;border:0;border-radius:8px}#status{white-space:pre-wrap;padding:1rem;border:1px solid #666}</style>
+<h1>Prueba aislada: consumos guardados</h1><p>Solo datos sintéticos. No conecta Firebase ni registra ventas.</p>
+<button id="save">Guardar cuenta de prueba</button><button id="read">Recuperar después de recargar</button><button id="lock">Probar bloqueo de segunda pestaña</button><p id="status" role="status">Listo para probar.</p>
+<script src="/continuity.js"></script><script>
+const client=ChingadazoContinuity.create();let opened=false;
+async function open(){if(!opened){await client.open('synthetic-cashier');opened=true;}}
+const status=document.getElementById('status');
+document.getElementById('save').onclick=async()=>{try{await open();await client.save({posTicket:[{productId:'synthetic-product',qty:2,unit:55,note:'Sin chile'}],posName:'Prueba sintética'});status.textContent='Guardado confirmado: 2 consumos × L 55 = L 110. Nota: Sin chile. Ahora recarga esta página.';}catch(e){status.textContent=e.message;}};
+document.getElementById('read').onclick=async()=>{try{await client.close();const data=await client.open('synthetic-cashier');opened=true;if(!data)throw Error('Sin cuenta guardada.');status.textContent='Recuperado del almacenamiento del navegador: '+data.posTicket[0].qty+' consumos. Total L '+data.posTicket.reduce((sum,item)=>sum+item.qty*item.unit,0)+'. Nota: '+data.posTicket[0].note;}catch(e){status.textContent=e.message;}};
+document.getElementById('lock').onclick=async()=>{try{await open();const other=ChingadazoContinuity.create();await other.open('synthetic-cashier');await other.close();status.textContent='ERROR: bloqueo no aplicado';}catch(e){status.textContent='Bloqueo comprobado: '+e.message;}};
+</script></html>

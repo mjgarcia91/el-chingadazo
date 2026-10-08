@@ -1,0 +1,11 @@
+.git
+.wrangler
+node_modules
+tests
+scripts
+server
+_worker.js
+*.bat
+*.md
+*.zip
+firebase-rules.production.json

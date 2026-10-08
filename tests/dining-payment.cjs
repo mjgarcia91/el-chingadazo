@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {createDiningCheckout}=await import('../server/dining-checkout.js');
+ let root={dining:{schemaVersion:1,revision:1,tables:{t:{id:'t',number:1,kind:'table',accountId:'a'}},accounts:{a:{id:'a',tableId:'t',status:'open',revision:1,total:100,items:[{productId:'p',name:'Taco',unit:100,qty:1}],history:[]}},operations:{}},shifts:{s:{id:'s',userId:'cash'}}};
+ const get=p=>p.split('/').filter(Boolean).reduce((v,k)=>v?.[k],root);
+ let tail=Promise.resolve(),inventory=new Set(),failProjection=true;
+ const db=async(_,p)=>structuredClone(get(p)||null);
+ const mutateDb=(_,p,fn)=>{const run=tail.then(()=>{if(p.startsWith('/orders/')&&failProjection)throw Error('network');const keys=p.split('/').filter(Boolean),last=keys.pop();let node=root;for(const k of keys)node=node[k]||=( {} );const value=fn(structuredClone(node[last]||null));node[last]=value;return structuredClone(value)});tail=run.catch(()=>{});return run};
+ const service=createDiningCheckout({db,mutateDb,isShiftExpired:()=>false,recordSale:async(_,o)=>{inventory.add(o.id);return {recorded:true}}});
+ const actor={id:'cash',role:'cashier'},command={action:'checkout',accountId:'a',operationId:'payment1',expectedRevision:1,shiftId:'s',payment:'Efectivo',payWith:150};
+ await assert.rejects(service.run({}, {...actor,role:'kitchen'},command),e=>e.status===403);
+ await assert.rejects(service.run({},actor,{...command,payWith:90}),e=>e.status===400);
+ await assert.rejects(service.run({},actor,command),/network/);
+ assert.equal(root.dining.accounts.a.status,'checkout');assert.equal(root.dining.tables.t.accountId,'a');
+ failProjection=false;root.shifts.s.closedAt='now';
+ await Promise.all([service.run({},actor,command),service.run({},actor,command)]);
+ assert.equal(Object.keys(root.orders).length,1);assert.equal(inventory.size,1);assert.equal(root.dining.accounts.a.status,'paid');assert.equal(root.dining.tables.t.accountId,'a');
+ assert.equal(Object.values(root.orders)[0].status,'facturada');assert.equal(Object.values(root.orders)[0].changeGiven,50);
+ await assert.rejects(service.run({},actor,{...command,payWith:200}),e=>e.status===409);
+ await assert.rejects(service.run({},actor,{...command,operationId:'another'}),e=>e.status===412);
+ console.log('PASS table checkout: permissions, insufficient cash, durable reservation, recovery after closed shift, concurrent replay, one sale, paid occupied.');
+})().catch(e=>{console.error(e);process.exitCode=1});

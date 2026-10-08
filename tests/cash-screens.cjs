@@ -1,0 +1,18 @@
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),assert=require('node:assert/strict');
+const dom=new JSDOM(`<main class="page"><div class="cash-toolbar"></div><div class="pos-wrap"><div class="pos-menu"></div><aside class="pos-ticket"><div id="diningCashRoot"></div><div class="pos-lines">Taco</div><div class="pos-ticket-actions"><details class="pos-payment"><summary>Pago</summary><div class="pos-payment-fields"><input id="posPayWith" value="100"></div></details><div class="pos-sale-buttons"><button id="posSell">Confirmar</button></div><button id="posHold">Guardar</button></div></aside></div><div class="pos-work-queues"></div></main>`,{runScripts:'outside-only'});
+const w=dom.window;w.eval(fs.readFileSync('js/cash-screens.js','utf8'));
+let pane='sale',busy=false,table=false,writes=0;
+const ticket=[{name:'<Taco>',qty:1,unit:50}],root=w.document.querySelector('main');
+w.CashScreens.mount(root,{getPane:()=>pane,setPane:v=>pane=v,busy:()=>busy,table:()=>table,ticket:()=>ticket,total:()=>50,ready:()=>true,onTablePay:()=>writes++});
+const input=w.document.querySelector('#posPayWith');
+w.document.querySelector('[data-cash-screen-go="payment"]').click();
+assert.equal(pane,'payment');assert.equal(root.querySelector('[data-cash-screen="payment"]').hidden,false);
+assert.equal(root.querySelector('.pos-wrap').hidden,true);assert.equal(w.document.querySelector('#posPayWith'),input);
+assert.match(root.querySelector('.cash-receipt').textContent,/<Taco>/);assert.equal(root.querySelector('.cash-receipt taco'),null);
+w.CashScreens.open('sale');assert.equal(input.value,'100');assert.equal(ticket.length,1);assert.equal(writes,0);
+w.CashScreens.open('waiting');assert.equal(root.querySelector('#diningCashRoot').closest('[data-cash-screen]').dataset.cashScreen,'waiting');
+busy=true;w.CashScreens.open('sale');assert.equal(pane,'sale','Pending operations must not trap navigation');
+w.document.querySelector('[data-cash-screen-go="waiting"]').click();assert.equal(pane,'waiting','Pending recovery remains reachable');
+w.document.querySelector('[data-cash-screen-go="payment"]').click();assert.equal(pane,'waiting','Do not start another payment while pending');
+busy=false;w.CashScreens.open('sale');table=true;w.document.querySelector('[data-cash-screen-go="payment"]').click();assert.equal(writes,1,'Table payment uses the existing table controller');
+dom.window.close();console.log('PASS cash screens: independent panes, same inputs, preserved ticket, escaped receipt and pending navigation guard.');

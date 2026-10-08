@@ -1,0 +1,39 @@
+plugins { id 'com.android.application' version '8.10.1' }
+def selectedAbi = providers.gradleProperty('geckoAbi').orNull
+if (!(selectedAbi in ['armeabi-v7a','arm64-v8a','x86','x86_64'])) {
+ throw new GradleException('Specify -PgeckoAbi=<verified target ABI>; no HIOPOS ABI is assumed.')
+}
+android {
+ namespace 'hn.chingadazo.pos'
+ compileSdk 36
+ defaultConfig {
+  applicationId 'hn.chingadazo.geckoeval'
+  minSdk 23
+  targetSdk 35
+  versionCode 8
+  versionName '1.0.0'
+  ndk { abiFilters selectedAbi }
+ }
+ buildTypes {
+  release {
+   debuggable false
+   // Preserve the installed APK identity; never require uninstalling user data.
+   signingConfig signingConfigs.debug
+  }
+ }
+ sourceSets {
+  main {
+   manifest.srcFile 'AndroidManifest.xml'
+   java.srcDirs = ['src','../src']
+   java.includes = ['**/Gecko*.java','**/PrinterCore.java']
+   assets.srcDirs = [layout.buildDirectory.dir('generated-assets')]
+  }
+ }
+ compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+tasks.register('prepareExtension', Copy) {
+ from 'extension'
+ into layout.buildDirectory.dir('generated-assets/messaging')
+}
+tasks.named('preBuild').configure { dependsOn 'prepareExtension' }
+dependencies { implementation "org.mozilla.geckoview:geckoview-${selectedAbi}:144.0.20251027123126" }

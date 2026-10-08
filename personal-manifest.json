@@ -1,0 +1,20 @@
+{
+  "name": "Personal · El Chingadazo",
+  "short_name": "Personal Chingadazo",
+  "description": "Caja, cocina y administración de El Chingadazo",
+  "id": "/personal",
+  "start_url": "/personal",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0b0c",
+  "theme_color": "#0b0b0c",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/assets/logo.jpg",
+      "sizes": "960x960",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

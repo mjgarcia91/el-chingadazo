@@ -1,0 +1,24 @@
+// Static integration guards, NOT an Android UI/runtime test.
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const activity=fs.readFileSync('android/gecko/src/hn/chingadazo/pos/GeckoEvaluationActivity.java','utf8');
+const delegate=fs.readFileSync('android/gecko/src/hn/chingadazo/pos/GeckoSimulatedDelegate.java','utf8');
+assert.match(activity,/session\.setPromptDelegate\(/,'Gecko must display the web alerts used by connectPrinter');
+assert.match(activity,/onAlertPrompt/);
+assert.match(activity,/onButtonPrompt\(GeckoSession s,ButtonPrompt prompt\)/,'confirm must be presented instead of default dismissal');
+assert.match(activity,/setPositiveButton\("Aceptar",\(d,w\)->decision.finish\(true\)\)/);
+assert.match(activity,/setNegativeButton\("Cancelar",\(d,w\)->decision.finish\(false\)\)/);
+assert.match(activity,/ButtonPrompt.Type.POSITIVE:ButtonPrompt.Type.NEGATIVE/);
+assert.match(activity,/decision.finish\(null\);dialog.dismiss\(\)/);
+assert.match(activity,/new AlertDialog\.Builder/);
+assert.match(activity,/prompt\.dismiss\(\)/,'An alert must resolve without authorizing a transaction');
+assert.match(activity,/onPromptDismiss/,'Gecko navigation must close stale dialogs');
+assert.match(activity,/if\(activeAlert!=null\)activeAlert\.dismiss\(\)/,'Activity cleanup must dismiss the visible alert');
+assert.match(activity,/bridge=new GeckoUsbDelegate\(extension,usb,this::showBridgeStatus\)/);
+assert.match(delegate,/GeckoPolicy\.validate\(fields\)[\s\S]*statusObserver\.accept\(/,'Feedback follows Java validation');
+assert.match(delegate,/SIMULADO: canal recibido/);
+assert.match(delegate,/void onConnect\(WebExtension\.Port/);
+assert.match(delegate,/onPortMessage\(Object value,WebExtension\.Port/);
+assert.match(delegate,/port\.postMessage\(reply\)/);
+assert.match(delegate,/trusted\(port\.name,port\.sender\)/,'validate the port sender, not message claims');
+assert.doesNotMatch(delegate,/UsbPrinter|UsbManager\s+\w+|accepted",true/,'Feedback must not enable physical operations');
+console.log('Gecko shell static guards: alert wiring, cleanup, native feedback, simulated boundary');

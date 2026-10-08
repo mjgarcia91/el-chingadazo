@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+(async()=>{
+ const dom=new JSDOM('<main id="salon"></main>',{url:'https://test.local',runScripts:'outside-only'}),w=dom.window;
+ w.eval(fs.readFileSync('js/dining.js','utf8'));
+ const actor={id:'admin',role:'admin'};let calls=0;
+ const state={initialized:true,revision:1,zones:{first:{id:'first',name:'Primer nivel'}},accounts:{},tables:{one:{id:'one',number:1,kind:'table',zoneId:'first',active:true,row:1,column:1,accountId:''}}};
+ const api=async(path,options)=>{calls++;return structuredClone(state)};
+ w.DiningUI.mount(w.document.querySelector('main'),{user:actor,api,isActive:()=>true});
+ await new Promise(r=>setTimeout(r,10));
+ assert(w.document.querySelector('[data-dining-table="one"]'));assert.match(w.document.querySelector('main').textContent,/Libre/);assert.match(w.document.querySelector('main').textContent,/no están habilitados/);
+ assert.equal(w.document.querySelector('[data-dining-zone]'),null,'No zone tabs');
+ assert.equal(w.document.querySelector('[name="kind"]'),null,'No bars');
+ assert.equal(w.document.querySelector('[name="temporary"]'),null,'No events');
+ w.document.querySelector('[data-dining-action="new"]').click();
+ assert.equal(w.document.querySelector('[name="number"]').value,'31');
+ assert.equal(w.document.querySelector('[name="column"]').value,'2','New table starts in an available position');
+ w.document.querySelector('[data-dining-table="one"]').click();assert(w.document.querySelector('[data-dining-action="open"]'));
+ w.DiningUI.stop();dom.window.close();assert(calls>=1);
+ console.log('PASS dining UI: loaded table, accessible selection, account controls and explicit no-consumptions/no-checkout boundary.');
+})().catch(e=>{console.error(e);process.exitCode=1});

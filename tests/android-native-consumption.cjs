@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const read=name=>fs.readFileSync('android/src/hn/chingadazo/pos/'+name+'.java','utf8');
+const http=read('NativeHttp'),view=read('NativeSalesView'),flow=read('NativeConsumption');
+assert.match(http,/body.length>12000/,'byte limit before output stream');
+assert.match(http,/Endpoint.CONSUME\?consumptionBody/,'sending uses same bounded encoder as preflight');
+assert.match(view,/NativeHttp.validateConsumption/);
+assert.match(view,/NativePaidEffects.kitchen/);assert.match(view,/Imprimir comanda de cocina/);
+assert.match(view,/Enviar productos nuevos a mesa/);
+assert.match(view,/Recuperar el mismo envío/);
+assert.match(view,/Recuperar cuentas locales/);
+assert.match(view,/Saldo guardado:/,'previous account balance separate from draft');
+assert.match(view,/NativeDraftContexts.destination/,'context constrains destination selection');
+assert.match(flow,/drafts.prepare/);assert.match(flow,/drafts.confirm/);
+assert.match(flow,/firstAttempt&&/,'unknown attempts cannot be discarded after a later rejection');
+assert.doesNotMatch(flow,/requestPrint|UsbPrinter|RawBT|checkout|payment/,'consumption cannot charge or print');
+assert.doesNotMatch(read('NativeAccessActivity'),/\.consume\(/,'original access pilot cannot send batches');
+console.log('Native consumption integration guards PASS');

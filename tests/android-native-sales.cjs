@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const read=p=>fs.readFileSync(p,'utf8');
+const manifest=read('android/AndroidManifest-native-pos.xml');
+assert.match(manifest,/package="hn.chingadazo.nativepilot"/,'one integrated update, not another package');
+assert.match(manifest,/allowBackup="false"/);assert.match(manifest,/usesCleartextTraffic="false"/);
+assert.match(manifest,/NativePosActivity/);
+const build=read('android/build.ps1');
+assert.match(build,/if\(\$NativePos\)\{\$apk="\$build\//,'internal build not distributed');
+const view=read('android/src/hn/chingadazo/pos/NativeSalesView.java');
+assert.match(view,/EN DESARROLLO/);assert.match(view,/No es una factura/);
+assert.doesNotMatch(view,/android.webkit|RawBT|requestPrint|\/api\/invoice/);
+const disk=read('android/src/hn/chingadazo/pos/NativeDraftStore.java');
+assert.match(disk,/getNoBackupFilesDir/);assert.match(disk,/AES\/GCM\/NoPadding/);
+assert.match(disk,/updateAAD\(\(ALIAS\+":"\+owner\)/,'draft cryptographically bound to operator');
+assert.match(disk,/file.failWrite/);assert.match(disk,/file.finishWrite/);
+console.log('Native sales integration boundaries PASS');

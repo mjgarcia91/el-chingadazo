@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="hn.chingadazo.usbtest" android:versionCode="1" android:versionName="1.0.0">
+ <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="35" />
+ <uses-feature android:name="android.hardware.usb.host" android:required="true" />
+ <application android:label="Chingadazo Prueba USB" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="false" android:icon="@drawable/icon">
+  <activity android:name="hn.chingadazo.pos.UsbTestActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden">
+   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+  </activity>
+ </application>
+</manifest>

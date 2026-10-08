@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {createDiningCheckout}=await import('../server/dining-checkout.js');
+ const sale={id:'dining-a',diningAccountId:'a',items:[{productId:'p',qty:1,unit:433}],total:433,paidAt:'2026-10-03T04:00:00Z',paidBy:'cash',invoiced:true};
+ const root={dining:{revision:1,accounts:{a:{id:'a',status:'checkout',revision:1,checkout:{sale}}}},orders:{'dining-a':structuredClone(sale)}};
+ const get=p=>p.split('/').filter(Boolean).reduce((v,k)=>v?.[k],root);
+ const mutateDb=async(_,p,fn)=>{const keys=p.split('/').filter(Boolean),last=keys.pop();let n=root;for(const k of keys)n=n[k]||={};n[last]=fn(structuredClone(n[last]));return structuredClone(n[last]);};
+ let inventoryWorks=false;
+ const service=createDiningCheckout({db:async(_,p)=>structuredClone(get(p)),mutateDb,recordSale:async()=>{if(!inventoryWorks)throw Error('Inventory unavailable');return {recorded:true}}});
+ await service.reconcile({});
+ assert.equal(root.dining.accounts.a.status,'paid','A durable paid sale must not be trapped by inventory');
+ assert.equal(root.dining.accounts.a.inventoryPending,true);assert.equal(Object.keys(root.orders).length,1);
+ root.dining.accounts.a.status='closed';inventoryWorks=true;await service.reconcile({});
+ assert.equal(root.dining.accounts.a.status,'closed','Inventory recovery must not reopen a released table');
+ assert.equal(root.dining.accounts.a.inventoryPending,false);
+ assert.equal(Object.keys(root.orders).length,1);
+ root.dining.accounts.a.status='checkout';root.orders['dining-a'].status='cancelado';
+ await assert.rejects(service.reconcile({}),/pendientes de conciliación/);
+ assert.equal(root.dining.accounts.a.status,'checkout','A cancelled order must never authorize releasing a table');
+ console.log('PASS inventory recovery: paid sales release independently; inventory stays pending and recovers after closure');
+})().catch(e=>{console.error(e);process.exitCode=1});

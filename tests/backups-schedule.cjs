@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
+(async () => {
+  let runs = 0;
+  const context = vm.createContext({ Response, Request, URL, TextEncoder, crypto: require('node:crypto').webcrypto });
+  Object.assign(context, await import('../server/instance.js'));
+  Object.assign(context, await import('../server/shift-maintenance.js'));
+  for (const name of ['createAccess','createDelivery','createFamily','createPayerGame','createChupisticaGame','createManager']) context[name] = () => ({});
+  context.createBackupService = () => ({ run: async () => { runs++; } });
+  context.cleanupStoryProofs = () => { throw Error('Unrelated maintenance must not run'); };
+  vm.runInContext(fs.readFileSync('_worker.js','utf8').replace(/^(?:import .*\n)+/,'').replace('export default {','globalThis.worker={'), context);
+  const env = { FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({project_id:'el-chingadazo-cfe45'}), BACKUP_DAILY_ENABLED:'false' };
+  await context.worker.scheduled({cron:'0 9 * * *'}, env);
+  assert.equal(runs,0);
+  env.BACKUP_DAILY_ENABLED='true';
+  await context.worker.scheduled({cron:'0 9 * * *'}, env);
+  assert.equal(runs,1);
+  let reconciled=0;context.createDiningCheckout=()=>({reconcile:async()=>{reconciled++}});
+  await context.worker.scheduled({cron:'*/5 * * * *'},env);assert.equal(reconciled,0);
+  env.DINING_CONSUMPTIONS_ENABLED='true';await context.worker.scheduled({cron:'*/5 * * * *'},env);assert.equal(reconciled,1);
+  env.FIREBASE_SERVICE_ACCOUNT_JSON=JSON.stringify({project_id:'other'});
+  await assert.rejects(context.worker.scheduled({cron:'0 9 * * *'},env));
+  assert.equal(runs,1);
+  console.log('PASS daily branch flag, own-project check, no unrelated scheduled maintenance.');
+})().catch(error => { console.error(error); process.exitCode=1; });

@@ -1,0 +1,33 @@
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-Permitted-Cross-Domain-Policies: none
+  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Permissions-Policy: usb=(self), geolocation=(self), camera=(self), microphone=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://apis.google.com https://www.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://www.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; img-src 'self' data: blob: https:; media-src 'self' blob:; worker-src 'self' blob:; manifest-src 'self'; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://www.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+
+/index.html
+  Cache-Control: no-store, max-age=0
+
+/js/*
+  Cache-Control: no-store, max-age=0
+
+/delivery/*
+  Cache-Control: no-store, max-age=0
+
+/sw.js
+  Cache-Control: no-store, max-age=0
+
+/manifest.json
+  Cache-Control: no-store, max-age=0
+
+/personal-manifest.json
+  Cache-Control: no-store, max-age=0
+
+/descargas/*.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment
+  Cache-Control: no-store
